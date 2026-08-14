@@ -1,0 +1,82 @@
+citation: "SCDES AI Operations Manual \xA78 (Data Governance), \xA720 (Portfolio Management)"
+foundations:
+- key: data_governance
+  label: Data governance stood up
+  provides:
+  - data_governance
+  requires: []
+  one_time: 180000
+  recurring: 40000
+  status: in_progress
+  why: 'Prerequisite for every Category 2 or 3 project: named data owners, classification,
+    retention and lineage.'
+  appendix: "Appendix D \u2014 Data Readiness Assessment"
+- key: mcp_api_access
+  label: Siloed files made API-accessible and meta-tagged
+  provides:
+  - mcp_api_access
+  - retrieval
+  requires:
+  - data_governance
+  one_time: 420000
+  recurring: 60000
+  status: not_started
+  why: Unlocks retrieval for the permit assistant and inspection targeting; without
+    it every project rebuilds its own access.
+  appendix: "Appendix D \u2014 Data Readiness Assessment"
+- key: identity_access
+  label: Identity and access baseline
+  provides:
+  - identity_access
+  requires: []
+  one_time: 90000
+  recurring: 25000
+  status: not_started
+  why: SSO and role assignment for the governance app itself and for any system that
+    writes to the Registry.
+  appendix: "Appendix C \u2014 AI System Registry"
+- key: evaluation_harness
+  label: Evaluation harness and stopping rules
+  provides:
+  - evaluation_harness
+  requires:
+  - data_governance
+  one_time: 140000
+  recurring: 30000
+  status: not_started
+  why: Gate 2 cannot be evidenced without a repeatable evaluation and an agreed stopping
+    rule.
+  appendix: "Appendix J \u2014 Evaluation Methodology"
+- key: data_readiness_baseline
+  label: Data readiness baseline across bureaux
+  provides:
+  - data_readiness_baseline
+  requires:
+  - data_governance
+  one_time: 75000
+  recurring: 0
+  status: not_started
+  why: Establishes which programmes can support AI at all, so the roadmap is sequenced
+    on evidence rather than appetite.
+  appendix: "Appendix D \u2014 Data Readiness Assessment"
+desired_projects:
+- name: "PermitPro \u2014 Stormwater"
+  registry_id: AI-001
+  requires:
+  - data_governance
+  one_time: 0
+  recurring: 1500000
+- name: Risk-based inspection targeting
+  registry_id: ''
+  requires:
+  - data_governance
+  - mcp_api_access
+  one_time: 610000
+  recurring: 120000
+- name: Public permit assistant
+  registry_id: ''
+  requires:
+  - mcp_api_access
+  - identity_access
+  one_time: 300000
+  recurring: 120000

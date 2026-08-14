@@ -1,0 +1,38 @@
+{
+  "registry_id": "AI-008",
+  "name": "AQ-002 \u00b7 Predictive Analytics",
+  "description": "Air quality forecast modeling \u2014 predict AQI trends for public health advisories",
+  "category": 2,
+  "bureau": "Air",
+  "domain": "Air Quality",
+  "stage": "concept",
+  "gate": 0,
+  "operational_owner": "",
+  "technical_owner": "",
+  "data_owner": "",
+  "owners": [
+    "liz.operator"
+  ],
+  "factor_scores": {
+    "regulatory_impact": 1,
+    "public_facing_exposure": 3,
+    "data_sensitivity": 2,
+    "reversibility": 2,
+    "community_impact": 2,
+    "federal_program_nexus": 3
+  },
+  "scores_are_derived": true,
+  "typical_classification": "Moderate",
+  "data_sources": "Meteorological, emissions inventory, satellite",
+  "federal_nexus": "CAA",
+  "regulatory_constraints": "Public health implications; requires validation against federal models",
+  "vendor": "",
+  "annual_cost": 0.0,
+  "capabilities_required": [],
+  "seeded_from": "Appendix A \u2014 Use Case Taxonomy",
+  "created_at": "2026-08-12T15:11:52+00:00",
+  "updated_at": "2026-08-12T15:13:20+00:00",
+  "gate_history": [],
+  "appendix_instances": {},
+  "notes": "Derived starting scores: Regulatory Impact 1 \u2014 'Predictive Analytics'. Public-Facing Exposure 3 \u2014 Category 2. Data Sensitivity 2 \u2014 sources: Meteorological, emissions inventory, satellite. Reversibility 2 \u2014 reversible with moderate effort. Community Impact 2. Federal Program Nexus 3 \u2014 'CAA'."
+}

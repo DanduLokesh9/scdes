@@ -1,0 +1,65 @@
+version: 1
+source: "Appendix B \u2014 AI Risk Classification Matrix"
+citation: "Appendix B \u2014 AI Risk Classification Matrix; SCDES AI Operations Manual\
+  \ \xA76 (Risk Classification Procedure)"
+max_possible: 24.0
+factors:
+- key: regulatory_impact
+  label: Regulatory Impact
+  weight: 1.5
+  levels:
+    1: No regulatory impact
+    2: Indirect influence on operations
+    3: Direct effect on regulatory outcomes
+- key: public_facing_exposure
+  label: Public-Facing Exposure
+  weight: 1.0
+  levels:
+    1: Internal only; no public interaction
+    2: Limited public interaction
+    3: Directly affects public services or decisions
+- key: data_sensitivity
+  label: Data Sensitivity
+  weight: 1.5
+  levels:
+    1: Public data only
+    2: Internal operational data
+    3: PII, enforcement data, or legally protected data
+- key: reversibility
+  label: Reversibility
+  weight: 1.0
+  levels:
+    1: Easily reversed; no downstream dependencies
+    2: Reversible with moderate effort
+    3: Difficult to reverse; downstream dependencies exist
+- key: community_impact
+  label: Community Impact
+  weight: 1.5
+  levels:
+    1: No differential community impact expected
+    2: Potential differential impact on communities
+    3: Known or likely disproportionate impact on overburdened communities
+- key: federal_program_nexus
+  label: Federal Program Nexus
+  weight: 1.5
+  levels:
+    1: No federal program connection
+    2: Indirect federal program nexus
+    3: Delegated federal program (NPDES, RCRA, CAA, etc.)
+thresholds:
+  low_max: 12
+  moderate_min: 13
+  moderate_max: 17
+  high_min: 18
+  high_factor_count: 2
+  single_high_forces_moderate: true
+band_text:
+  LOW RISK: "8\u201312 Zero High factors Bureau-level approval sufficient Standard\
+    \ periodic review per Appendix J"
+  MODERATE RISK: "13\u201317 or any single High factor Any project with one or more\
+    \ High factors classifies at minimum Moderate Risk per Section 7 AI Governance\
+    \ Council review required Enhanced monitoring; quarterly performance review"
+  HIGH RISK: "18\u201324 or two or more High factors Two or more High factors AI Governance\
+    \ Council review plus independent review [selector and internal/external nature\
+    \ reserved to the Council] Continuous monitoring; documented incident response\
+    \ plan required"

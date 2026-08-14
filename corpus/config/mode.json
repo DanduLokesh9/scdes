@@ -1,0 +1,33 @@
+{
+  "mode": "configuration",
+  "adopted_at": "2026-08-12T15:42:57+00:00",
+  "adopted_by": [
+    "council.cto",
+    "council.gc",
+    "council.water"
+  ],
+  "parameter_set_hash": "af427b255dd8",
+  "history": [
+    {
+      "at": "2026-08-12T15:42:57+00:00",
+      "to": "operating",
+      "members": [
+        "council.cto",
+        "council.gc",
+        "council.water"
+      ],
+      "parameter_set_hash": "af427b255dd8",
+      "summary": "Tuned parameter set adopted; guardrails activated."
+    },
+    {
+      "at": "2026-08-12T15:43:18+00:00",
+      "to": "configuration",
+      "members": [
+        "council.cto",
+        "council.gc",
+        "council.water"
+      ],
+      "reason": "Reference build: reopened so the tuning window can be demonstrated."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "registry_id": "AI-004",
+  "name": "WQ-003 \u00b7 Predictive Analytics",
+  "description": "Watershed impairment prediction \u2014 model likelihood of 303(d) listing based on monitoring data trends",
+  "category": 2,
+  "bureau": "Water",
+  "domain": "Water Quality",
+  "stage": "concept",
+  "gate": 0,
+  "operational_owner": "",
+  "technical_owner": "",
+  "data_owner": "",
+  "owners": [
+    "liz.operator"
+  ],
+  "factor_scores": {
+    "regulatory_impact": 1,
+    "public_facing_exposure": 2,
+    "data_sensitivity": 2,
+    "reversibility": 1,
+    "community_impact": 1,
+    "federal_program_nexus": 3
+  },
+  "scores_are_derived": true,
+  "typical_classification": "Moderate",
+  "data_sources": "Ambient monitoring, land use, weather",
+  "federal_nexus": "CWA / 303(d)",
+  "regulatory_constraints": "Cannot replace required monitoring; advisory only",
+  "vendor": "",
+  "annual_cost": 0.0,
+  "capabilities_required": [],
+  "seeded_from": "Appendix A \u2014 Use Case Taxonomy",
+  "created_at": "2026-08-12T15:11:51+00:00",
+  "updated_at": "2026-08-12T15:13:20+00:00",
+  "gate_history": [],
+  "appendix_instances": {},
+  "notes": "Derived starting scores: Regulatory Impact 1 \u2014 'Predictive Analytics'; constraints keep a human in the loop, so this influences operations rather than deciding outcomes. Public-Facing Exposure 2 \u2014 Category 2. Data Sensitivity 2 \u2014 sources: Ambient monitoring, land use, weather. Reversibility 1 \u2014 a human decision sits between output and effect. Community Impact 1. Federal Program Nexus 3 \u2014 'CWA / 303(d)'."
+}

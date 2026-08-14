@@ -1,0 +1,55 @@
+{
+  "registry_id": "AI-001",
+  "name": "PermitPro \u2014 Permitting Analysis & Triage",
+  "description": "Risk-based triage of the permitting backlog. Ranks permit actions by volume, statutory-clock exposure and processing latency so reviewers work the highest-consequence queue first. Seeded from the SCDES permitting unified model (235,009 completed submission records, 4/2022\u20134/2026).",
+  "category": 2,
+  "bureau": "Water",
+  "domain": "Water Quality",
+  "stage": "suspended",
+  "gate": 2,
+  "operational_owner": "Bureau of Water \u2014 Permitting",
+  "technical_owner": "Office of Technology",
+  "data_owner": "Bureau of Water",
+  "owners": [
+    "liz.operator",
+    "sean.ot"
+  ],
+  "factor_scores": {
+    "regulatory_impact": 3,
+    "public_facing_exposure": 2,
+    "data_sensitivity": 2,
+    "reversibility": 2,
+    "community_impact": 2,
+    "federal_program_nexus": 3
+  },
+  "scores_are_derived": false,
+  "typical_classification": "Moderate",
+  "data_sources": "Submission records, backlog snapshots, permit-type catalogue, statutory-deadline flags",
+  "federal_nexus": "CWA / NPDES",
+  "regulatory_constraints": "Advisory triage only; must not constitute a permit decision. Processing-time data is right-censored (completed-only) \u2014 the backlog is invisible to the speed data, so ranking on it under-prioritises stuck cases.",
+  "vendor": "",
+  "annual_cost": 0.0,
+  "capabilities_required": [
+    "data_governance",
+    "mcp_api_access"
+  ],
+  "seeded_from": "05_WORKED_EXAMPLE_SCDES_PermitPro / SCDES_Permitting_Unified_Model.xlsx",
+  "created_at": "2026-08-12T15:11:51+00:00",
+  "updated_at": "2026-08-14T13:05:54+00:00",
+  "gate_history": [
+    {
+      "at": "2026-08-12T15:26:35+00:00",
+      "by": "liz.operator",
+      "from_gate": 2,
+      "from_stage": "pilot",
+      "to_gate": 2,
+      "to_stage": "suspended",
+      "note": "Suspended on INC-7933C9 (Level 2 \u2014 material)"
+    }
+  ],
+  "appendix_instances": {
+    "G": "corpus\\registry\\AI-001\\Appendix_G_Project_Intake_Form.xlsx",
+    "J": "corpus\\registry\\AI-001\\Appendix_J_Evaluation_Methodology.xlsx"
+  },
+  "notes": "Data Quality Log records 3 CRITICAL findings: right-censored processing time, backlog invisible to the speed data, and 8.5% exact duplicate rows. Gate 1 data readiness must clear these before pilot results are trusted."
+}

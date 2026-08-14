@@ -1,0 +1,185 @@
+name: South Carolina Department of Environmental Services
+short_name: SCDES
+jurisdiction: South Carolina
+naming_rule: Refer to the agency as "South Carolina Department of Environmental Services
+  (SCDES)" on first use and "SCDES" thereafter.
+documents:
+  framework:
+    doc_id: SCDES_AI_Governance_Framework_Final
+    label: SCDES AI Governance Framework
+    path: corpus\framework\SCDES_AI_Governance_Framework_Final.docx
+    sections: 25
+    authoritative: true
+  manual:
+    doc_id: SCDES_AI_Operations_Manual
+    label: SCDES AI Operations Manual
+    path: corpus\manual\SCDES_AI_Operations_Manual.docx
+    sections: 82
+    authoritative: true
+  procedures:
+    doc_id: Appendix_N_Council_Operating_Procedures
+    label: Appendix N — Council Operating Procedures
+    path: corpus\appendices\Appendix_N_Council_Operating_Procedures.docx
+    sections: 0
+    authoritative: true
+  directive:
+    doc_id: SCDES_AI_Governance_Adoption_Directive
+    label: SCDES AI Governance Adoption Directive
+    path: corpus\charter\SCDES_AI_Governance_Adoption_Directive.docx
+    sections: 0
+    authoritative: true
+instrument_noun: Appendix
+instrument_keys:
+- A
+- B
+- C
+- D
+- E
+- F
+- G
+- H
+- I
+- J
+- K
+- L
+- M
+- N
+instruments:
+  A:
+    title: ENVIRONMENTAL AI USE CASE TAXONOMY
+    filename: Appendix_A_Use_Case_Taxonomy.xlsx
+    role: taxonomy
+    sheets: 3
+    fields: 8
+  B:
+    title: AI RISK CLASSIFICATION MATRIX
+    filename: Appendix_B_Risk_Classification_Matrix.xlsx
+    role: risk_model
+    sheets: 1
+    fields: 81
+  C:
+    title: AI SYSTEM REGISTRY
+    filename: Appendix_C_AI_System_Registry.xlsx
+    role: registry
+    sheets: 3
+    fields: 34
+  D:
+    title: DATA READINESS ASSESSMENT
+    filename: Appendix_D_Data_Readiness_Assessment.xlsx
+    role: data_readiness
+    sheets: 1
+    fields: 136
+  E:
+    title: VENDOR AI DISCLOSURE QUESTIONNAIRE
+    filename: Appendix_E_Vendor_AI_Disclosure.xlsx
+    role: vendor_disclosure
+    sheets: 6
+    fields: 112
+  F:
+    title: DISPARATE IMPACT AND COMMUNITY IMPACT SCREENING CHECKLIST
+    filename: Appendix_F_Community_Impact_Screening.xlsx
+    role: community_impact
+    sheets: 1
+    fields: 16
+  G:
+    title: AI PROJECT INTAKE FORM
+    filename: Appendix_G_Project_Intake_Form.xlsx
+    role: intake
+    sheets: 1
+    fields: 60
+  H:
+    title: SCDES AI Operations Manual
+    filename: Appendix_H_Gate_Review_Checklists.xlsx
+    role: gate_checklists
+    sheets: 6
+    fields: 306
+  I:
+    title: TECHNOLOGY AND CONTRACT CAPABILITY SURVEY
+    filename: Appendix_I_Technology_and_Contract_Capability_Survey.xlsx
+    role: capability_survey
+    sheets: 2
+    fields: 15
+  J:
+    title: STANDARDIZED AI EVALUATION METHODOLOGY
+    filename: Appendix_J_Evaluation_Methodology.xlsx
+    role: evaluation
+    sheets: 4
+    fields: 167
+  K:
+    title: AI SYSTEM DOCUMENTATION (MODEL CARD)
+    filename: Appendix_K_Model_Card.xlsx
+    role: model_card
+    sheets: 1
+    fields: 78
+  L:
+    title: AI INCIDENT REPORT FORM
+    filename: Appendix_L_AI_Incident_Report.xlsx
+    role: incident
+    sheets: 1
+    fields: 40
+  M:
+    title: TABLE OF AUTHORITIES
+    filename: Appendix_M_Table_of_Authorities.xlsx
+    role: authorities
+    sheets: 2
+    fields: 15
+  N:
+    title: Council Operating Procedures
+    filename: Appendix_N_Council_Operating_Procedures.docx
+    role: council_procedures
+    sheets: 0
+    fields: 0
+    format: document
+gate_noun: Gate
+gates:
+- key: '0'
+  name: Concept
+  source_sheet: Gate 0 - Concept
+  requirements: 19
+- key: '1'
+  name: Readiness
+  source_sheet: Gate 1 - Readiness
+  requirements: 18
+- key: '2'
+  name: Pilot Auth
+  source_sheet: Gate 2 - Pilot Auth
+  requirements: 26
+- key: '3'
+  name: Deployment
+  source_sheet: Gate 3 - Deployment
+  requirements: 27
+- key: '4'
+  name: Scaling
+  source_sheet: Gate 4 - Scaling
+  requirements: 12
+- key: '5'
+  name: Annual
+  source_sheet: Gate 5 - Annual
+  requirements: 21
+roles:
+- Agency Director
+- Chief Technology Officer
+- Council Chair
+- Artificial Intelligence Strategist
+- Data Officer
+- Agency General Counsel
+- Deputy Director
+- External Affairs Officer
+- Bureau Chief
+org_units:
+- Water
+- Land and Waste
+- Air
+- Coastal Zone Management
+- Operations and Services
+- Other (specify)
+statutory_programmes:
+- NPDES
+- RCRA
+- CAA
+- ADA
+adoption_date: '2026-07-21'
+adoption_source: 'filename: AI_Council_Charter_and_Adoption_Memo_SIGNED_2026-07-21'
+confirmed: false
+discovered_at: '2026-08-13T09:28:53+00:00'
+notes: []

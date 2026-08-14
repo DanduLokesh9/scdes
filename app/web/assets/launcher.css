@@ -1,0 +1,435 @@
+/* Agency launcher — the landing page.
+
+   The map is real geography (Census boundaries, Albers projection) and the
+   flag is clipped to the country outline rather than sitting behind it, so
+   the map *is* the flag. A selected state lifts out of the flag and takes on
+   its agency's colour.
+
+   Light and dark are both supported. The page chrome — backdrop, panel, text —
+   flips; the flag and the state overlay do not. That is deliberate: the states
+   are drawn on top of the flag, so their legibility depends on the flag's own
+   red/white/blue, not on the surrounding page. Inverting them for light mode
+   would make the outlines harder to see, not easier. */
+
+.launcher {
+  position: fixed; inset: 0; z-index: 90;
+  overflow: hidden;            /* nothing here scrolls — the map absorbs the slack */
+
+  /* Dark is the default; the light block below overrides. Kept as local
+     variables so every rule reads from one place per mode. */
+  --lnch-bg: radial-gradient(ellipse at 50% 20%,
+    #14303c 0%, #0b1d25 55%, #050e13 100%);
+  --lnch-ink: #eef4f5;
+  --lnch-ink-strong: #ffffff;
+  --lnch-ink-muted: #a8bcc2;
+  --lnch-ink-faint: #8ba0a6;
+  --lnch-panel: rgba(8, 22, 28, .82);
+  --lnch-hair: rgba(255, 255, 255, .16);
+  --lnch-hair-strong: rgba(255, 255, 255, .5);
+  --lnch-chip: rgba(255, 255, 255, .09);
+  --lnch-swatch-edge: rgba(255, 255, 255, .22);
+  --lnch-shadow: 0 18px 40px rgba(0, 0, 0, .34);
+
+  background: var(--lnch-bg);
+}
+
+:root[data-theme="light"] .launcher {
+  --lnch-bg: radial-gradient(ellipse at 50% 20%,
+    #ffffff 0%, #e8eff1 55%, #d3dfe3 100%);
+  --lnch-ink: #12222a;
+  --lnch-ink-strong: #08161d;
+  --lnch-ink-muted: #46595f;
+  --lnch-ink-faint: #4f6167;   /* AA over the gradient's darkest stop */
+  --lnch-panel: rgba(255, 255, 255, .9);
+  --lnch-hair: rgba(9, 30, 38, .16);
+  --lnch-hair-strong: rgba(9, 30, 38, .42);
+  --lnch-chip: rgba(9, 30, 38, .05);
+  --lnch-swatch-edge: rgba(9, 30, 38, .24);
+  --lnch-shadow: 0 14px 32px rgba(9, 30, 38, .16);
+}
+
+body.launcher-open { overflow: hidden; }
+
+/* Everything fits the viewport: heading, map, selected agency and note, no
+   scrolling. The map is the elastic row and absorbs whatever is left over.
+
+   The three parts that make that actually work, because getting any one wrong
+   silently falls back to a 960×600 map that overflows:
+     · .lnch-inner has a *definite* height (100%, not min-height) — a percentage
+       height on the SVG has nothing to resolve against otherwise;
+     · .mapwrap is flex: 1 1 0 with min-height: 0 — basis auto would size it
+       from the SVG's intrinsic aspect ratio, and min-height auto would refuse
+       to shrink below it;
+     · the SVG then takes height: 100% and letterboxes inside its viewBox. */
+.lnch-inner {
+  height: 100%;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 14px 22px 16px; gap: 9px;
+  overflow: hidden;
+}
+
+.lnch-head { text-align: center; color: var(--lnch-ink); max-width: 78ch; flex: none; }
+.lnch-eyebrow {
+  font-size: 10px; letter-spacing: 2.2px; text-transform: uppercase;
+  color: var(--accent-text); margin: 0 0 4px;
+}
+.lnch-head h1 { font-size: 22px; color: var(--lnch-ink-strong); margin: 0 0 5px; }
+.lnch-head p {
+  margin: 0; font-size: 12.5px; color: var(--lnch-ink-muted); line-height: 1.5;
+}
+.keys { display: inline-block; margin-left: 4px; }
+.keys kbd {
+  font-family: var(--body); font-size: 10.5px; padding: 1px 6px;
+  border: 1px solid var(--lnch-hair); border-radius: 4px;
+  background: var(--lnch-chip); color: var(--lnch-ink);
+}
+
+/* ------------------------------------------------------------- the map */
+
+.mapwrap {
+  width: min(1080px, 100%);
+  flex: 1 1 0; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;              /* the flag pop-up anchors to this */
+}
+
+/* ------------------------------------------------- the state flag pop-up */
+
+.flagpop {
+  position: absolute; z-index: 3; margin: 0;
+  padding: 6px 6px 4px;
+  background: var(--lnch-panel);
+  border: 1px solid var(--lnch-hair);
+  border-radius: 9px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .38);
+  pointer-events: none;            /* never steals a click meant for a state */
+  text-align: center;
+}
+/* The image failing must not make the pop-up vanish — reserve the space so the
+   caption still appears and the failure is visible rather than silent. */
+.flagpop img {
+  display: block; width: 132px; min-height: 20px; height: auto;
+  border-radius: 3px;
+  /* A hairline, because several state flags are largely white and would
+     otherwise dissolve into the panel behind them. */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .28);
+}
+.flagpop figcaption {
+  margin-top: 4px; font-size: 10.5px; font-weight: 600;
+  color: var(--lnch-ink); letter-spacing: .2px;
+}
+.flagpop.in { animation: flagIn .22s ease-out; }
+@keyframes flagIn {
+  from { opacity: 0; transform: translateY(5px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+/* Respect a stated preference for less motion — this is decoration. */
+@media (prefers-reduced-motion: reduce) {
+  .flagpop.in { animation: none; }
+}
+.usmap {
+  width: 100%; height: 100%;
+  display: block; overflow: visible;
+  /* Double-click opens an agency, so stop it selecting the state titles. */
+  user-select: none; -webkit-user-select: none;
+}
+
+/* Unchanged between modes — see the note at the top of the file.
+
+   The fill used to be a 34% black scrim, which is what made the map look
+   washed out: it was mixing every stripe toward grey. State borders now read
+   from a dark stroke with a light one under it — legible over red, white and
+   blue alike — so the flag itself can stay at full strength. */
+.usmap .st {
+  fill: rgba(8, 20, 28, .10);
+  stroke: rgba(10, 22, 30, .55);
+  stroke-width: .85;
+  paint-order: stroke fill;
+  cursor: pointer;
+  transition: fill .13s ease, stroke .13s ease;
+}
+.usmap .st:hover {
+  fill: rgba(255, 255, 255, .34);
+  stroke: #fff; stroke-width: 1.3;
+}
+.usmap .st:focus-visible { outline: none; stroke: #fff; stroke-width: 2.2; }
+
+.usmap .st.active {
+  stroke: #fff; stroke-width: 1.8;
+  filter: drop-shadow(0 0 9px rgba(255, 255, 255, .65));
+}
+
+/* Drawn over everything and never hit-tested, so it sharpens the coastline
+   without stealing clicks from the states underneath. */
+.usmap .outline path {
+  fill: none; stroke: rgba(2, 12, 20, .45); stroke-width: 1.1;
+  pointer-events: none; vector-effect: non-scaling-stroke;
+}
+/* A state whose corpus is actually loaded is marked, not merely themed. Uses
+   the universal ok colour, not a brand colour: it means something. */
+.usmap .st.has-corpus { stroke: var(--ok); stroke-width: 1.5; }
+
+/* ------------------------------------------------------- selected agency */
+
+.lnch-pick {
+  width: min(1080px, 100%); flex: none;
+  background: var(--lnch-panel);
+  border: 1px solid var(--lnch-hair);
+  box-shadow: var(--lnch-shadow);
+  border-radius: 13px; padding: 12px 16px; color: var(--lnch-ink);
+  display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center;
+}
+.lnch-pick .who small {
+  font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--accent-text); display: block; margin-bottom: 3px;
+}
+/* The agency name and the mode toggle share a line: the toggle belongs with the
+   thing it affects, and the name stays the largest element on it. */
+.who-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.who-line > b { font-size: 17px; color: var(--lnch-ink-strong); }
+.who-line .mode-chip {
+  font-size: 11px; font-weight: 600; padding: 4px 11px; border-radius: 20px;
+  min-width: 74px; text-align: center; cursor: pointer;
+  background: var(--lnch-chip); color: var(--lnch-ink);
+  border: 1px solid var(--lnch-swatch-edge);
+}
+.who-line .mode-chip:hover { border-color: var(--lnch-hair-strong); }
+.lnch-pick .who span { font-size: 12px; color: var(--lnch-ink-muted); }
+/* Wraps, because the count is whatever the agency has — two swatches or twenty.
+   Width is fixed rather than fractional so a long palette reads as a long
+   palette instead of being squeezed to fit a row. */
+.lnch-swatches {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px;
+  max-width: 46ch;
+}
+.lnch-swatches i {
+  width: 26px; height: 13px; border-radius: 3px; display: block;
+  border: 1px solid var(--lnch-swatch-edge);
+}
+.lnch-actions { display: flex; flex-direction: column; gap: 7px; }
+.lnch-actions .btn { white-space: nowrap; }
+
+.lnch-note {
+  width: min(1080px, 100%); margin: 0; font-size: 11px; flex: none;
+  color: var(--lnch-ink-faint);
+  line-height: 1.5; border-left: 2px solid var(--lnch-hair);
+  padding-left: 11px;
+}
+
+/* Short viewports: shed the fixed rows before the map gets squeezed, since the
+   map is the thing being chosen from. Without this the map is what gives way. */
+@media (max-height: 780px) {
+  .lnch-inner { gap: 7px; padding: 10px 20px 12px; }
+  .lnch-head h1 { font-size: 18px; margin-bottom: 2px; }
+  .lnch-head p { font-size: 11.5px; }
+  .lnch-pick { padding: 10px 14px; }
+  .lnch-swatches { margin-top: 6px; }
+}
+@media (max-height: 640px) {
+  .lnch-eyebrow { display: none; }
+  .lnch-swatches { display: none; }
+}
+@media (max-height: 560px) {
+  .lnch-note { display: none; }
+}
+
+@media (max-width: 760px) {
+  .lnch-pick { grid-template-columns: 1fr; }
+  .lnch-head h1 { font-size: 20px; }
+}
+
+
+/* --------------------------------------------------------------- sign in */
+
+/* Deliberately a full step rather than a modal over the map: choosing who you
+   are is a decision the record keeps, and it should not feel like dismissing a
+   dialog on the way to somewhere else. */
+.signin {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  padding: 24px;
+}
+.signin-card {
+  width: min(460px, 100%);
+  background: var(--lnch-panel);
+  border: 1px solid var(--lnch-hair);
+  border-radius: 14px;
+  box-shadow: var(--lnch-shadow);
+  padding: 22px 24px 18px;
+  color: var(--lnch-ink);
+}
+.signin-eyebrow {
+  margin: 0 0 4px; font-size: 10px; letter-spacing: 1.6px;
+  text-transform: uppercase; color: var(--accent-text); font-weight: 700;
+}
+.signin-card h2 {
+  margin: 0 0 8px; font-size: 19px; color: var(--lnch-ink-strong);
+  line-height: 1.25;
+}
+.signin-lede {
+  margin: 0 0 16px; font-size: 12.5px; line-height: 1.55;
+  color: var(--lnch-ink-muted);
+}
+
+.signin-list { display: flex; flex-direction: column; gap: 7px; }
+.signin-who {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 9px 11px; border-radius: 10px; text-align: left;
+  color: var(--lnch-ink); cursor: pointer;
+  background: var(--lnch-chip);
+  border: 1px solid transparent;
+}
+.signin-who:hover { border-color: var(--lnch-hair-strong); }
+.signin-who.on {
+  border-color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px var(--accent-text);
+}
+.signin-ava {
+  width: 30px; height: 30px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  background: var(--action); color: var(--on-action);
+}
+.signin-who-text b { display: block; font-size: 13px; line-height: 1.25; }
+.signin-who-text small { font-size: 11px; color: var(--lnch-ink-muted); }
+
+/* Stated at the same weight as everything else. This build does not verify
+   identity, and a sign-in screen that hides that is worse than none. */
+.signin-warn {
+  margin: 15px 0 0; padding-left: 10px;
+  border-left: 2px solid var(--warn);
+  font-size: 11px; line-height: 1.5; color: var(--lnch-ink-muted);
+}
+
+.signin-actions {
+  display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;
+}
+
+@media (max-height: 640px) {
+  .signin-lede { display: none; }
+  .signin-card { padding: 16px 18px 14px; }
+}
+
+
+/* ------------------------------------------------------------- onboarding */
+
+/* Sits above the map, and the map does not open behind it. Reuses the
+   launcher's own light/dark variables by re-declaring them, because .onboard is
+   a sibling of .launcher rather than a child and cannot inherit them. */
+.onboard {
+  position: fixed; inset: 0; z-index: 140;
+  display: grid; place-items: center;
+  padding: 24px;
+  overflow: auto;
+
+  --lnch-bg: radial-gradient(ellipse at 50% 20%,
+    #14303c 0%, #0b1d25 55%, #050e13 100%);
+  --lnch-ink: #eef4f5;
+  --lnch-ink-strong: #ffffff;
+  --lnch-ink-muted: #a8bcc2;
+  --lnch-panel: rgba(8, 22, 28, .86);
+  --lnch-hair: rgba(255, 255, 255, .16);
+  --lnch-hair-strong: rgba(255, 255, 255, .5);
+  --lnch-chip: rgba(255, 255, 255, .07);
+  --lnch-shadow: 0 18px 44px rgba(0, 0, 0, .4);
+
+  background: var(--lnch-bg);
+}
+:root[data-theme="light"] .onboard {
+  --lnch-bg: radial-gradient(ellipse at 50% 20%,
+    #ffffff 0%, #e8eff1 55%, #d3dfe3 100%);
+  --lnch-ink: #12222a;
+  --lnch-ink-strong: #08161d;
+  --lnch-ink-muted: #46595f;
+  --lnch-panel: rgba(255, 255, 255, .94);
+  --lnch-hair: rgba(9, 30, 38, .16);
+  --lnch-hair-strong: rgba(9, 30, 38, .42);
+  --lnch-chip: rgba(9, 30, 38, .04);
+  --lnch-shadow: 0 14px 34px rgba(9, 30, 38, .18);
+}
+body.onboarding { overflow: hidden; }
+
+.onb-card {
+  width: min(520px, 100%);
+  background: var(--lnch-panel);
+  border: 1px solid var(--lnch-hair);
+  border-radius: 15px;
+  box-shadow: var(--lnch-shadow);
+  padding: 26px 28px 20px;
+  color: var(--lnch-ink);
+}
+.onb-eyebrow {
+  margin: 0 0 5px; font-size: 10px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--accent-text); font-weight: 700;
+}
+.onb-card h1 {
+  margin: 0 0 8px; font-size: 22px; color: var(--lnch-ink-strong);
+  line-height: 1.25;
+}
+.onb-lede {
+  margin: 0 0 18px; font-size: 12.5px; line-height: 1.55;
+  color: var(--lnch-ink-muted);
+}
+
+/* ---- step 1 ---- */
+
+.onb-choices { display: flex; flex-direction: column; gap: 9px; }
+.onb-choice {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 13px 15px; border-radius: 11px;
+  background: var(--lnch-chip); color: var(--lnch-ink);
+  border: 1px solid var(--lnch-hair);
+}
+.onb-choice:hover:not([disabled]) { border-color: var(--accent-text); }
+.onb-choice-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.onb-choice-head b { font-size: 14.5px; color: var(--lnch-ink-strong); }
+.onb-choice-body {
+  display: block; margin-top: 5px; font-size: 12px; line-height: 1.5;
+  color: var(--lnch-ink-muted);
+}
+/* Shown, not hidden: knowing the business path is planned is the useful part. */
+.onb-choice.soon { cursor: not-allowed; opacity: .72; }
+.onb-soon {
+  flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .6px;
+  text-transform: uppercase; padding: 3px 8px; border-radius: 20px;
+  background: var(--warn-fill); color: var(--warn);
+  border: 1px solid var(--warn);
+}
+
+/* ---- step 2 ---- */
+
+.onb-field { display: block; margin-bottom: 12px; }
+.onb-field > span {
+  display: block; margin-bottom: 5px; font-size: 11.5px; font-weight: 600;
+  color: var(--lnch-ink);
+}
+.onb-field em { font-style: normal; font-weight: 400; color: var(--lnch-ink-muted); }
+.onb-field input {
+  width: 100%; padding: 9px 11px; border-radius: 9px;
+  background: var(--lnch-chip); color: var(--lnch-ink);
+  border: 1px solid var(--lnch-hair); font-size: 13px;
+}
+.onb-field input:focus-visible {
+  outline: 2px solid var(--accent-text); outline-offset: 1px;
+}
+
+.onb-error {
+  margin: 0 0 12px; padding: 8px 11px; border-radius: 8px;
+  font-size: 12px; line-height: 1.45;
+  background: var(--alert-fill); color: var(--alert);
+  border: 1px solid var(--alert);
+}
+.onb-warn {
+  margin: 4px 0 0; padding-left: 10px;
+  border-left: 2px solid var(--warn);
+  font-size: 11px; line-height: 1.5; color: var(--lnch-ink-muted);
+}
+.onb-actions {
+  display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
+}
+
+@media (max-height: 620px) {
+  .onb-lede { display: none; }
+  .onb-card { padding: 18px 20px 15px; }
+}

@@ -1,0 +1,504 @@
+/* SCDES AI Governance — shell.
+   Palette is untouched: every colour resolves through tokens.css.
+
+   Layout idea: "the record and the reason". The centre column is what the
+   governed record says; the right rail is always why — the rule it implements
+   and the section it cites. Explainability is structural, not a feature. */
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--body);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, b, .num { font-family: var(--serif); }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* The open option list is drawn by the platform, not by the page, and it does
+   not inherit the control's colours. The user picker sits on the dark chrome
+   with white text, so its list was rendering white on white — and in dark mode
+   the same happened to every form select in the record. State both explicitly. */
+select option,
+select optgroup {
+  background: var(--surface);
+  color: var(--ink);
+}
+button { cursor: pointer; border: 0; background: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 8px; top: 8px; z-index: 99; background: var(--chrome);
+  color: #fff; padding: 10px 16px; }
+
+/* ---------------------------------------------------------------- topbar */
+
+.topbar {
+  display: flex; align-items: center; gap: 18px;
+  padding: 0 18px; height: 56px; flex: none;
+  background: var(--chrome); color: var(--on-chrome);
+  border-bottom: 1px solid var(--sidebar-line);
+}
+.tb-brand { display: flex; align-items: center; gap: 11px; flex: none; }
+/* The mark is banded with every colour the agency has — two or twenty — so the
+   count is visible rather than normalised away. Built by app/theme.py. */
+.mark {
+  width: 28px; height: 28px; border-radius: 7px; flex: none;
+  background: var(--brand-bands);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+}
+.tb-name b { font-size: 14px; color: #fff; display: block; line-height: 1.1; }
+.tb-name small { font-size: 10.5px; color: var(--sidebar-muted);
+  letter-spacing: .5px; text-transform: uppercase; }
+
+.cmdk {
+  flex: 1; max-width: 620px; display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,.09); border: 1px solid var(--sidebar-line); border-radius: 9px;
+  padding: 7px 12px; color: var(--sidebar-muted); font-size: 13px; text-align: left;
+}
+.cmdk:hover { border-color: var(--highlight); }
+.cmdk-ico { color: var(--highlight); font-size: 12px; }
+.cmdk span:nth-child(2) { flex: 1; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; }
+.cmdk kbd {
+  font-family: var(--body); font-size: 10px; letter-spacing: .4px;
+  border: 1px solid var(--sidebar-line); border-radius: 4px; padding: 2px 6px;
+  color: var(--sidebar-muted);
+}
+
+.tb-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.tb-chip {
+  font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 20px;
+  background: rgba(255,255,255,.09); color: var(--on-chrome); border: 1px solid var(--sidebar-line);
+  white-space: nowrap;
+}
+.tb-chip.tuning { background: var(--warn-fill); color: var(--warn-on-dark);
+  border-color: var(--warn); }
+.tb-chip.live { background: var(--ok-fill); color: var(--ok-on-dark);
+  border-color: var(--ok); }
+.tb-chip.bad { background: var(--alert-fill); color: var(--alert-on-dark);
+  border-color: var(--alert); }
+/* Light/dark is a display preference, so it gets a quiet chip beside the agency
+   switcher rather than a coloured status one. Fixed min-width stops the header
+   shifting when the label flips between "Dark" and "Light". */
+.mode-chip {
+  min-width: 74px; text-align: center; cursor: pointer;
+}
+.mode-chip:hover { border-color: rgba(255, 255, 255, .45); }
+
+.tb-user { display: flex; align-items: center; gap: 8px; }
+.ava {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
+  color: #fff; display: grid; place-items: center; font-size: 11px;
+  font-weight: 700; flex: none;
+}
+#userPick {
+  background: rgba(255,255,255,.09); color: var(--on-chrome); border: 1px solid var(--sidebar-line);
+  border-radius: 7px; padding: 5px 6px; font-size: 11.5px;
+}
+/* The closed control is white text on dark chrome; the list that drops out of
+   it is not, so it needs its own pairing. */
+#userPick option { background: var(--surface); color: var(--ink); }
+
+/* ----------------------------------------------------------------- spine */
+
+.spine {
+  display: flex; align-items: center; gap: 20px; flex: none;
+  background: var(--sidebar-2); color: var(--sidebar-ink);
+  border-bottom: 1px solid var(--sidebar-line); padding: 9px 18px;
+  overflow-x: auto;
+}
+.spine-proj { text-align: left; flex: none; color: inherit; max-width: 230px; }
+.spine-proj b { display: block; font-size: 12.5px; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spine-proj span { font-size: 11px; color: var(--sidebar-muted); }
+.spine-track { display: flex; align-items: center; gap: 0; margin: 0;
+  padding: 0; list-style: none; }
+.gate {
+  display: flex; align-items: center; gap: 8px; padding: 5px 13px;
+  border-radius: 20px; color: var(--sidebar-ink); font-size: 12px;
+  white-space: nowrap;
+}
+.gate:hover { background: rgba(255,255,255,.07); }
+.gate .pip {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  border: 1.5px solid var(--sidebar-muted);
+}
+.gate.done .pip { background: var(--ok); border-color: var(--ok); }
+.gate.now { background: var(--warn-fill); }
+.gate.now .pip { background: var(--warn); border-color: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-fill); }
+.gate.ahead { opacity: .5; }
+.gate-link { width: 20px; height: 1px; background: var(--sidebar-line); flex: none; }
+
+/* ----------------------------------------------------------------- shell */
+
+.shell {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 194px minmax(0,1fr) 316px;
+}
+.shell.no-reason { grid-template-columns: 194px minmax(0,1fr) 44px; }
+
+.rail {
+  border-right: 1px solid var(--line); background: var(--surface);
+  padding: 14px 10px; overflow-y: auto;
+}
+.rail-eyebrow {
+  font-size: 9.5px; letter-spacing: 1.3px; text-transform: uppercase;
+  color: var(--muted); margin: 16px 8px 6px; font-weight: 700;
+}
+.rail-eyebrow:first-child { margin-top: 2px; }
+
+.rail-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 10px; border-radius: 8px; font-size: 13px; text-align: left;
+  color: var(--ink);
+}
+.rail-item i { font-style: normal; color: var(--accent); width: 14px;
+  text-align: center; font-size: 12px; }
+.rail-item:hover { background: var(--surface-2); }
+/* Arrow keys move focus without selecting, so the focus ring is the only thing
+   telling you where you are — it has to be unmissable, and distinguishable from
+   the active item's dark fill. */
+.rail-item:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+  background: var(--surface-2);
+}
+.rail-item.active:focus-visible {
+  outline-color: var(--highlight); background: var(--chrome);
+}
+/* Placed after the rule above so focusing the front door cannot fill it with
+   the active treatment, whatever classes end up on it. */
+.rail-item.rail-launch:focus-visible,
+.rail-item.rail-launch.active:focus-visible {
+  background: var(--surface-2); color: var(--accent-text);
+  outline-color: var(--accent-text);
+}
+.rail-item.active { background: var(--chrome); color: #fff; font-weight: 600; }
+.rail-item.active i { color: var(--highlight); }
+
+/* The agency picker is the front door, so it stays prominent — but it is an
+   *action*, not a place you can currently be. It used to be filled with
+   --chrome, exactly how .rail-item.active is drawn, so it read as the selected
+   page at all times. Outlined instead, with an inset shadow rather than a
+   border so it occupies the same box as every other item.
+
+   Declared after .rail-item and .rail-item.active, and qualified with both
+   class names, because these rules lost on source order otherwise: plain
+   `.rail-launch` ties with `.rail-item` on specificity, so `color: var(--ink)`
+   won and the label went dark-on-dark in light mode. */
+.rail-item.rail-launch {
+  background: none; color: var(--accent-text); font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--accent-text);
+  margin-bottom: 4px;
+}
+.rail-item.rail-launch i { color: var(--accent-text); }
+.rail-item.rail-launch:hover { background: var(--surface-2); }
+.rail-item.rail-launch .tag {
+  border-color: var(--accent-text); color: var(--accent-text);
+}
+/* Never let the front door inherit the active fill: it is not a view. */
+.rail-item.rail-launch.active {
+  background: none; color: var(--accent-text);
+}
+.rail-item .tag {
+  margin-left: auto; font-size: 8.5px; letter-spacing: .5px;
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px;
+  color: var(--muted);
+}
+.rail-item.active .tag { border-color: rgba(255,255,255,.3); color: var(--highlight); }
+
+.record { overflow-y: auto; padding: 26px 30px 60px; }
+.rec-head { margin-bottom: 22px; }
+.crumb { font-size: 10.5px; letter-spacing: .8px; color: var(--muted);
+  text-transform: uppercase; margin: 0 0 6px; }
+h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.2px; }
+.lede { color: var(--muted); font-size: 13.5px; margin: 0; max-width: 70ch; }
+
+/* ---------------------------------------------------------------- reason */
+
+.reason {
+  border-left: 1px solid var(--line); background: var(--surface-2);
+  overflow-y: auto; display: flex; flex-direction: column;
+}
+.reason-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 16px; border-bottom: 1px solid var(--line);
+  font-size: 9.5px; letter-spacing: 1.3px; text-transform: uppercase;
+  color: var(--muted); font-weight: 700; position: sticky; top: 0;
+  background: var(--surface-2);
+}
+.reason-head button { color: var(--muted); font-size: 16px; line-height: 1; }
+.shell.no-reason .reason-head span, .shell.no-reason #reasonBody { display: none; }
+.shell.no-reason .reason-head button { transform: rotate(180deg); }
+#reasonBody { padding: 16px; font-size: 12.5px; }
+.reason-empty { color: var(--muted); }
+.reason-block { padding-bottom: 16px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--line); }
+.reason-block:last-child { border-bottom: 0; }
+.reason-block h4 { margin: 0 0 6px; font-size: 12.5px; font-family: var(--body);
+  font-weight: 700; }
+.reason-block p { margin: 0 0 8px; color: var(--muted); }
+.reason-cite {
+  font-size: 11px; color: var(--accent); background: var(--surface);
+  border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0; padding: 7px 10px;
+}
+.reason-quote { font-size: 11.5px; color: var(--ink); font-style: italic;
+  border-left: 2px solid var(--line); padding-left: 10px; margin: 6px 0; }
+
+/* ---------------------------------------------------------------- pieces */
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 18px 20px; margin-bottom: 16px;
+}
+.panel > :first-child { margin-top: 0; }
+h2.sec { font-size: 17px; margin: 26px 0 12px; display: flex; gap: 10px;
+  align-items: center; flex-wrap: wrap; }
+h3.sub3 { font-size: 13.5px; margin: 18px 0 9px; }
+.intro { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; max-width: 74ch; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
+  gap: 12px; margin-bottom: 16px; }
+.tile {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 13px 15px; text-align: left;
+}
+.tile .num { font-size: 21px; font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; }
+.tile .cap { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--muted); margin-top: 5px; }
+.tile.click:hover { border-color: var(--accent); }
+
+.pill { display: inline-flex; font-size: 10.5px; font-weight: 700;
+  padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+.pill.low, .pill.ok { background: var(--risk-low-fill); color: var(--ok); }
+.pill.moderate { background: var(--risk-moderate-fill); color: var(--risk-moderate); }
+.pill.high, .pill.bad { background: var(--alert-fill); color: var(--alert); }
+.pill.neutral { background: var(--surface-2); color: var(--muted);
+  border: 1px solid var(--line); }
+.pill.info { background: rgba(0,0,0,.05); color: var(--accent-text); }
+
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font-size: 9.5px; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--muted); font-weight: 700;
+  padding: 7px 9px; border-bottom: 1px solid var(--line); }
+td { padding: 8px 9px; border-bottom: 1px solid var(--line);
+  vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+tbody tr.click:hover { background: var(--surface-2); cursor: pointer; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.btn { background: var(--action); color: var(--on-action); border-radius: 8px;
+  padding: 8px 16px; font-size: 12.5px; font-weight: 600; }
+.btn.ghost { background: none; border: 1px solid var(--line); color: var(--ink); }
+.btn.warn { background: var(--alert); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.note { font-size: 11.5px; color: var(--muted); flex: 1; min-width: 200px; }
+
+.locked { background: var(--surface-2); border: 1px dashed var(--line);
+  border-radius: var(--r); padding: 20px; color: var(--muted); font-size: 12.5px; }
+.locked b { color: var(--ink); display: block; margin-bottom: 5px; font-size: 13.5px; }
+
+/* control fields */
+.field { padding: 15px 0; border-top: 1px solid var(--line); }
+.field:first-of-type { border-top: 0; padding-top: 0; }
+.field h4 { margin: 0 0 3px; font-size: 13px; font-family: var(--body); }
+.field .governs { font-size: 12px; color: var(--muted); margin: 0 0 8px;
+  max-width: 72ch; }
+.ctrl { display: flex; align-items: center; gap: 13px; }
+.ctrl input[type=range] { flex: 1; accent-color: var(--accent); }
+.ctrl input[type=number], .ctrl select, .ctrl input[type=text] {
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px;
+  background: var(--surface-2); }
+.val { font-weight: 700; font-size: 14px; min-width: 66px; text-align: right;
+  font-variant-numeric: tabular-nums; font-family: var(--serif); }
+.impact { margin-top: 10px; border-radius: 8px; padding: 9px 12px;
+  font-size: 11.5px; line-height: 1.5;
+  background: var(--alert-fill); border: 1px solid var(--alert-fill); }
+.impact.quiet { background: var(--surface-2); border-color: var(--line);
+  color: var(--muted); }
+.impact b { color: var(--alert); }
+.impact.quiet b { color: var(--muted); }
+.impact ul { margin: 7px 0 0; padding-left: 17px; }
+
+/* findings */
+.finding { border-left: 3px solid var(--line); padding: 11px 0 11px 13px;
+  margin-bottom: 12px; }
+.finding.critical { border-left-color: var(--alert); }
+.finding.serious { border-left-color: var(--warn); }
+.finding.moderate { border-left-color: var(--accent); }
+.finding h4 { margin: 0 0 4px; font-size: 13px; font-family: var(--body); }
+.finding p { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
+.finding .fix { font-size: 12px; color: var(--ok); }
+.finding .quote { font-size: 11.5px; font-style: italic; color: var(--ink);
+  border-left: 2px solid var(--line); padding-left: 9px; margin: 5px 0; }
+.finding .where { font-size: 10.5px; color: var(--muted); }
+
+/* log */
+.entry { display: flex; gap: 11px; padding: 9px 0;
+  border-top: 1px solid var(--line); font-size: 12px; align-items: baseline; }
+.entry:first-child { border-top: 0; }
+.entry time { color: var(--muted); width: 108px; flex: none; font-size: 11px;
+  font-variant-numeric: tabular-nums; }
+.entry .k { font-size: 9.5px; font-weight: 700; letter-spacing: .4px;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 5px; flex: none; }
+.k.allow { background: var(--risk-low-fill); color: var(--ok); }
+.k.deny { background: var(--alert-fill); color: var(--alert); }
+.k.dec { background: rgba(0,0,0,.06); color: var(--accent-text); }
+.entry p { margin: 0; flex: 1; }
+.mono { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
+
+/* roadmap steps */
+.step-row { display: flex; align-items: center; gap: 11px; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: 9px; margin-bottom: 6px;
+  background: var(--surface-2); }
+.step-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.step-main { flex: 1; min-width: 0; }
+.step-name { font-size: 12.5px; font-weight: 600; }
+.step-why { font-size: 11px; color: var(--muted); }
+.step-cost { font-weight: 700; font-size: 12.5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.wave { font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--muted); font-weight: 700; margin: 14px 0 7px; }
+
+/* form fields */
+.ff { padding: 10px 0; border-top: 1px solid var(--line); }
+.ff:first-child { border-top: 0; }
+.ff label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.ff .cell { float: right; font-weight: 400; color: var(--muted); font-size: 10.5px;
+  font-family: ui-monospace, monospace; }
+.ff input, .ff select, .ff textarea { width: 100%; border: 1px solid var(--line);
+  border-radius: 7px; padding: 7px 9px; background: var(--surface-2);
+  font-size: 12px; }
+.ff .hint { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+
+.req { display: flex; gap: 9px; padding: 7px 0; border-top: 1px solid var(--line);
+  font-size: 12.5px; }
+.req:first-child { border-top: 0; }
+.req .n { color: var(--muted); width: 30px; flex: none;
+  font-variant-numeric: tabular-nums; }
+.req .t { flex: 1; }
+
+/* --------------------------------------------------------------- palette */
+
+/* An author-level `display` beats the browser's `[hidden] { display:none }`,
+   so anything toggled via the hidden attribute has to opt back out here. */
+[hidden] { display: none !important; }
+
+.palette {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55);
+  display: grid; place-items: start center; padding-top: 12vh; z-index: 60;
+}
+.palette-top { display: flex; align-items: center; gap: 10px; }
+.palette-top input { flex: 1; }
+.palette-close {
+  width: 34px; height: 34px; flex: none; border-radius: 8px;
+  border: 1px solid var(--sidebar-line); background: rgba(255,255,255,.09); color: var(--on-chrome);
+  font-size: 17px; line-height: 1;
+}
+.palette-close:hover { border-color: var(--highlight); color: #fff; }
+.palette-box {
+  width: min(700px, 92vw); background: var(--chrome); color: var(--on-chrome);
+  border: 1px solid var(--sidebar-line); border-radius: 14px; padding: 16px 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4); max-height: 74vh; overflow-y: auto;
+}
+.palette-box input {
+  width: 100%; background: rgba(255,255,255,.09); border: 1px solid var(--sidebar-line);
+  border-radius: 9px; padding: 11px 13px; color: var(--on-chrome); font-size: 14px;
+}
+.palette-box input::placeholder { color: var(--sidebar-muted); }
+.palette-modes { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.pm { font-size: 10.5px; color: var(--sidebar-muted); border: 1px solid var(--sidebar-line);
+  border-radius: 20px; padding: 3px 9px; }
+#paletteOut { margin-top: 14px; }
+.answer { background: rgba(255,255,255,.09); border: 1px solid var(--sidebar-line); border-radius: 10px;
+  padding: 13px 15px; font-size: 13px; }
+.answer .amode { font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--highlight); margin-bottom: 7px; }
+.answer p { margin: 0 0 9px; white-space: pre-wrap; }
+.answer .cites { border-top: 1px solid var(--sidebar-line); padding-top: 9px; }
+.answer .cite { font-size: 11.5px; color: var(--on-chrome); margin-bottom: 7px; }
+.answer .cite b { color: #fff; display: block; }
+.answer .foot { margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--sidebar-line);
+  font-size: 11px; color: var(--highlight); }
+
+.toast {
+  position: fixed; right: 18px; bottom: 18px; max-width: 420px;
+  background: var(--chrome); color: var(--on-chrome); padding: 12px 15px;
+  border-radius: 10px; font-size: 12.5px; box-shadow: 0 6px 22px rgba(0,0,0,.25);
+  opacity: 0; transform: translateY(8px); pointer-events: none;
+  transition: opacity .18s, transform .18s; z-index: 70;
+}
+.toast.show { opacity: 1; transform: none; }
+.toast.bad { background: var(--alert); }
+
+.muted { color: var(--muted); }
+.small { font-size: 11.5px; }
+.spread { display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; flex-wrap: wrap; }
+
+@media (max-width: 1080px) {
+  .shell { grid-template-columns: 168px minmax(0,1fr); }
+  .reason { display: none; }
+}
+@media (max-width: 720px) {
+  .shell { grid-template-columns: 1fr; }
+  .rail { display: none; }
+  .cmdk kbd { display: none; }
+}
+
+
+/* ------------------------------------------------------------------ tour */
+
+/* A spotlight over the live interface. The mask is one element with a very
+   large spread shadow and a transparent centre, so the highlighted control
+   keeps its own colours and stays clickable — a full-screen overlay with a
+   cut-out would have to re-draw whatever it covers. */
+.tour { position: fixed; inset: 0; z-index: 200; }
+body.tour-open { overflow: hidden; }
+
+.tour-mask {
+  position: fixed;
+  top: var(--lit-top); left: var(--lit-left);
+  width: var(--lit-width); height: var(--lit-height);
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(3, 12, 18, .66);
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+  transition: top .18s ease, left .18s ease, width .18s ease, height .18s ease;
+  pointer-events: none;
+}
+
+/* The spotlit control is lifted above the mask so it reads at full strength. */
+.tour-lit { position: relative; z-index: 201; }
+
+.tour-card {
+  position: fixed; z-index: 202;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 15px 17px 13px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .34);
+}
+.tour-count {
+  margin: 0 0 5px; font-size: 10px; letter-spacing: 1.4px;
+  text-transform: uppercase; color: var(--muted); font-weight: 700;
+}
+.tour-card h3 { margin: 0 0 6px; font-size: 15px; }
+.tour-card p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.tour-actions { display: flex; align-items: center; gap: 8px; margin-top: 13px; }
+.tour-spacer { flex: 1; }
+.tour-actions .btn { padding: 6px 14px; font-size: 12px; }
+
+.tour-chip { cursor: pointer; }

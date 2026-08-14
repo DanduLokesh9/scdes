@@ -1,0 +1,49 @@
+# systemd unit — keeps the application running and restarts it if it dies.
+#
+# Install:  sudo cp governingai.service /etc/systemd/system/
+#           sudo systemctl daemon-reload
+#           sudo systemctl enable --now governingai
+# Watch:    sudo systemctl status governingai
+#           sudo journalctl -u governingai -f
+
+[Unit]
+Description=Governing AI — AI Governance application
+# Wait for real networking, not just for the interface to exist.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/governingai
+
+# 127.0.0.1, deliberately. The application has no authentication of its own, so
+# nginx is the only thing that may accept a connection from outside — binding to
+# 0.0.0.0 here would expose it on port 8765 regardless of any nginx config.
+Environment=HOST=127.0.0.1
+Environment=PORT=8765
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/governingai/.venv/bin/python -m app.server
+
+Restart=always
+RestartSec=3
+# If it crashes in a loop, stop trying rather than filling the disk with logs.
+StartLimitIntervalSec=300
+StartLimitBurst=8
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=governingai
+
+# Modest hardening. The app writes to its own directory (audit log, filled
+# workbooks, registrations), so that path stays writable and little else does.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/governingai
+
+[Install]
+WantedBy=multi-user.target

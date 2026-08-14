@@ -1,0 +1,16 @@
+citation: "SCDES AI Governance Framework \xA75 (Authorized Use Case Structure)"
+categories:
+  1:
+    label: Internal Service Optimization and Efficiency
+    sequence: 1
+    description: Internal tools that make existing work faster or more consistent,
+      with no direct public-facing decision.
+  2:
+    label: Public and Economic Benefit
+    sequence: 2
+    description: Systems that affect public services, public information, or regulated
+      parties.
+  3:
+    label: Innovation and Emerging Capability
+    sequence: 3
+    description: Exploratory capability building beyond current operations.
