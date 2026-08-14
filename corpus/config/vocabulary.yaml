@@ -1,0 +1,55 @@
+source: derived from the adopted SCDES corpus
+concepts:
+  use_case_grouping:
+    noun: Category
+    scheme: numeric
+    labels:
+      '1': Category 1
+      '2': Category 2
+      '3': Category 3
+    evidence: 72 uses in the corpus
+    alternatives:
+      category: 72
+  council_decision:
+    noun: Tier
+    scheme: alpha
+    labels:
+      a: Tier A
+      b: Tier B
+      c: Tier C
+    evidence: 34 uses in the corpus
+    alternatives:
+      tier: 34
+  incident_severity:
+    noun: Level
+    scheme: numeric
+    labels:
+      '1': Level 1
+      '2': Level 2
+      '3': Level 3
+    evidence: 35 uses in the corpus
+    alternatives:
+      level: 35
+      tier: 5
+  vendor_disclosure:
+    noun: Tier
+    scheme: numeric
+    labels:
+      '1': Tier 1
+      '2': Tier 2
+      '3': Tier 3
+      '4': Tier 4
+    evidence: 41 uses in the corpus
+    alternatives:
+      tier: 41
+      level: 2
+  risk_band:
+    noun: Risk
+    scheme: descriptive_risk
+    labels:
+      low: Low
+      moderate: Moderate
+      high: High
+    evidence: 8 uses in the corpus
+    alternatives:
+      low/moderate/high: 8

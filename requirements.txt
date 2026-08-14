@@ -1,0 +1,15 @@
+# Runtime dependencies. Python 3.11+ (developed against 3.14).
+#
+# Short by design: the web server, routing, JSON, retrieval and the audit chain
+# are all standard library. These three exist only to read the adopted documents.
+
+openpyxl>=3.1        # reads and writes the appendix workbooks (.xlsx)
+python-docx>=1.1     # reads the Framework, Operations Manual and charter (.docx)
+PyYAML>=6.0          # the configuration files under corpus/config/
+
+# Optional. Only needed if the Anthropic provider is used for phrasing; the
+# application runs fully offline without it via LocalProvider.
+# anthropic>=0.40
+
+# Development only.
+# pytest>=8.0

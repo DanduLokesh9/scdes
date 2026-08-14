@@ -1,0 +1,16 @@
+{
+  "quote_id": "Q-RIVERWATCH",
+  "vendor": "RiverWatch Analytics",
+  "product": "Effluent anomaly detection",
+  "project_id": "AI-003",
+  "cost_type": "recurring",
+  "one_time_cost": 0.0,
+  "recurring_cost_per_year": 240000,
+  "disclosure_tier": 1,
+  "goals": {
+    "internal_efficiency": 4,
+    "inspection_targeting": 4,
+    "permit_backlog_reduction": 1
+  },
+  "notes": ""
+}

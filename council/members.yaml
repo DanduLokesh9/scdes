@@ -1,0 +1,14 @@
+quorum: 3
+members:
+- id: council.cto
+  name: Chief Technology Officer
+  chair: true
+- id: council.gc
+  name: General Counsel
+- id: council.water
+  name: "Bureau Chief \u2014 Water"
+- id: council.air
+  name: "Bureau Chief \u2014 Air"
+- id: council.strategist
+  name: AI Strategist
+  secretary: true

@@ -1,0 +1,17 @@
+{
+  "quote_id": "Q-DELTA-BRAVO",
+  "vendor": "Delta Bravo",
+  "product": "PermitPro expansion \u2014 three divisions",
+  "project_id": "AI-001",
+  "cost_type": "recurring",
+  "one_time_cost": 0,
+  "recurring_cost_per_year": 1880000,
+  "disclosure_tier": 2,
+  "goals": {
+    "permit_backlog_reduction": 5,
+    "inspection_targeting": 3,
+    "internal_efficiency": 4,
+    "public_response_time": 3
+  },
+  "notes": "Quoted as an annual licence across three divisions. The vendor will re-type the build portion as one-time on request \u2014 which is the scenario worth running."
+}

@@ -1,0 +1,11 @@
+citation: "SCDES AI Operations Manual \xA79\u201310; Appendix E, Appendix I"
+pools:
+  recurring_per_year: 1500000
+  one_time: 0
+currency: USD
+goal_weights:
+  permit_backlog_reduction: 5
+  inspection_targeting: 4
+  public_response_time: 4
+  internal_efficiency: 3
+  innovation: 2

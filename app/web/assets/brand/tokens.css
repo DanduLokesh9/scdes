@@ -1,0 +1,129 @@
+/* Theme tokens — two groups that must never be confused.
+ *
+ * BRAND is whatever colours the agency actually has: two, three, eight, twenty.
+ * The list is never padded. Roles below are filled by *reusing* those colours
+ * (app/theme.py), so a two-colour agency is themed in exactly its two colours
+ * and a small brand reads as deliberate rather than diluted.
+ *
+ * STATUS is universal — identical in all fifty states. Low / Moderate / High
+ * risk, ok / warn / alert. Theming these per agency was the original mistake:
+ * it forced a green to be invented for every agency that hasn't got one, and it
+ * would mean "High risk" rendering maroon in one state and olive in the next
+ * across what is meant to be a legally binding record.
+ *
+ * Foreground colours are chosen, not invented: text over a brand colour is
+ * black or white, whichever is legible. The brand colour is never altered to
+ * make text fit. The one exception is --accent-text, a brand colour walked down
+ * its own hue until it clears WCAG AA 4.5:1 as small text on white.
+ *
+ * The values here are the SCDES defaults, from the SCDES Brand Style Guide.
+ * Selecting another agency overwrites the brand group at runtime; the status
+ * group is never overwritten.
+ *
+ * Naming rule: "South Carolina Department of Environmental Services (SCDES)"
+ * then "SCDES". Never "DES" or "SC DES".
+ */
+
+:root {
+  /* Tells the browser which palette to draw native controls in — dropdown
+     lists, scrollbars, date pickers. Without it the platform assumes light and
+     paints a white option list, which is invisible under white control text. */
+  color-scheme: light;
+
+  /* ---- brand: SCDES publishes eight, so eight are used ----
+   * DARK BLUE #003e53 · BLACK #071e32 · WATER #356584 · LAND #23884c
+   * LAB #0d757f · MARSH #babc33 · AIR #86c8bc · GRAY #c4ced4          */
+  --chrome: #071e32;          /* nav and header ground */
+  --chrome-2: #003e53;        /* gradient partner, active nav */
+  --chrome-line: #23884c;     /* rules inside the dark chrome */
+  --accent: #003e53;          /* links, focus, borders, strokes */
+  --accent-2: #356584;        /* secondary accent */
+  --highlight: #86c8bc;       /* light detail on dark chrome */
+
+  --on-chrome: #ffffff;       /* legible over --chrome */
+  --action: #003e53;          /* button fills — a colour that can carry text */
+  --on-action: #ffffff;       /* legible over --action */
+  /* --accent at a lightness that clears AA as small text, one value per canvas.
+     app/theme.py supplies both; --accent-text resolves to whichever applies.
+     These must stay stylesheet rules — applyTheme() sets the two inputs inline,
+     and an inline style would outrank the dark-mode swap below. */
+  --accent-text-light: #003e53;
+  --accent-text-dark: #6ea3b8;
+  --accent-text: var(--accent-text-light);
+
+  /* ---- status: universal, never themed ---- */
+  --ok: #1c7a43;
+  --warn: #8a6510;
+  --alert: #b3261e;
+  --risk-low: #1c7a43;
+  --risk-moderate: #8a6510;
+  --risk-high: #b3261e;
+  --risk-moderate-fill: rgba(138, 101, 16, 0.13);
+  --risk-low-fill: rgba(28, 122, 67, 0.13);
+  --risk-high-fill: rgba(179, 38, 30, 0.11);
+  /* Status tints, and status text light enough to read on the dark chrome.
+     Fixed values, because status is universal — these never retheme. */
+  --ok-fill: rgba(28, 122, 67, 0.16);
+  --warn-fill: rgba(138, 101, 16, 0.16);
+  --alert-fill: rgba(179, 38, 30, 0.16);
+  --ok-on-dark: #8fe0ac;
+  --warn-on-dark: #e8cd7a;
+  --alert-on-dark: #ffb4ae;
+
+  /* ---- neutrals: the paper, not the brand ---- */
+  --ink: #12222a;
+  --muted: #4d5f67;
+  --line: #d3dee0;
+  --canvas: #eef2f3;
+  --surface: #ffffff;
+  --surface-2: #f5f8f9;
+  --white: #ffffff;
+
+  /* dark chrome, derived from the brand roles by transparency only — a
+     translucent brand colour is still that colour, not a new one */
+  --sidebar: var(--chrome);
+  --sidebar-2: var(--chrome-2);
+  --sidebar-ink: #eef5f6;
+  --sidebar-muted: rgba(255, 255, 255, 0.62);
+  --sidebar-line: rgba(255, 255, 255, 0.16);
+
+  /* type — self-hosted, no CDN */
+  --serif: 'Ubuntu', 'Segoe UI', system-ui, sans-serif;
+  --body: 'Open Sans', system-ui, -apple-system, sans-serif;
+
+  --r: 12px;
+}
+
+/* Dark mode is driven by data-theme on <html>, not by the media query alone, so
+ * the toggle in the header can override the OS. An inline script in index.html
+ * resolves "follow the OS" into an explicit light/dark before first paint, which
+ * keeps this to one selector and avoids a flash of the wrong theme.
+ *
+ * --accent-text-dark is measured in app/theme.py against DARK_SURFACE, which is
+ * the *lightest* dark background brand text lands on (the launcher backdrop) —
+ * so it clears AA on --surface below as a side effect. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #05121a;
+  --surface: #0b1f29;
+  --surface-2: #0f2733;
+  --ink: #e7eff1;
+  --muted: #93a9b1;
+  --line: #1b3a46;
+
+  /* A brand accent darkened for white text is invisible on a dark canvas, so
+     the light-mode and dark-mode variants are both computed and swapped. */
+  --accent-text: var(--accent-text-dark);
+
+  /* Status colours lighten for contrast on a dark canvas but keep their hues —
+     Low stays green, Moderate amber, High red, in every state. */
+  --ok: #58c98a;
+  --warn: #d8b64a;
+  --alert: #ff9d95;
+  --risk-low: #58c98a;
+  --risk-moderate: #d8b64a;
+  --risk-high: #ff9d95;
+  --ok-fill: rgba(88, 201, 138, 0.16);
+  --warn-fill: rgba(216, 182, 74, 0.16);
+  --alert-fill: rgba(255, 157, 149, 0.15);
+}

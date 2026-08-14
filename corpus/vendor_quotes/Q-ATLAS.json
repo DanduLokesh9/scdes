@@ -1,0 +1,16 @@
+{
+  "quote_id": "Q-ATLAS",
+  "vendor": "Atlas Civic",
+  "product": "Public permit assistant",
+  "project_id": "AI-006",
+  "cost_type": "split",
+  "one_time_cost": 300000,
+  "recurring_cost_per_year": 120000,
+  "disclosure_tier": 3,
+  "goals": {
+    "public_response_time": 5,
+    "permit_backlog_reduction": 2,
+    "internal_efficiency": 2
+  },
+  "notes": ""
+}

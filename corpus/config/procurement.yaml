@@ -1,0 +1,18 @@
+citation: "SCDES AI Governance Framework \xA78A; SCDES AI Operations Manual \xA79"
+mandatory_provisions:
+- AI disclosure and inventory obligation
+- Data use and model-training restriction
+- Performance and accuracy standards
+- Audit and inspection rights
+- Incident notification obligation
+- Termination and transition assistance
+disclosure_tiers:
+  1: "Internal use, low decision criticality \u2014 streamlined disclosure"
+  2: "Internal use, high decision criticality \u2014 algorithmic disclosure"
+  3: "Public-facing, low decision criticality \u2014 accessibility and transparency"
+  4: "Public-facing, high decision criticality \u2014 comprehensive supplement"
+change_management:
+  1: Notify OT; registry update within 10 business days
+  2: OT review and CTO acknowledgement before substitution
+  3: Council concurrence (Tier B) before substitution
+  4: Convened Council decision (Tier C) before substitution

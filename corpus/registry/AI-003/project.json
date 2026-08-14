@@ -1,0 +1,38 @@
+{
+  "registry_id": "AI-003",
+  "name": "WQ-002 \u00b7 Compliance Monitoring",
+  "description": "Effluent data anomaly detection \u2014 identify unusual discharge patterns suggesting reporting errors or emergent problems",
+  "category": 1,
+  "bureau": "Water",
+  "domain": "Water Quality",
+  "stage": "concept",
+  "gate": 0,
+  "operational_owner": "",
+  "technical_owner": "",
+  "data_owner": "",
+  "owners": [
+    "liz.operator"
+  ],
+  "factor_scores": {
+    "regulatory_impact": 2,
+    "public_facing_exposure": 1,
+    "data_sensitivity": 2,
+    "reversibility": 2,
+    "community_impact": 1,
+    "federal_program_nexus": 3
+  },
+  "scores_are_derived": true,
+  "typical_classification": "Low",
+  "data_sources": "DMR data, historical trends",
+  "federal_nexus": "CWA / NPDES",
+  "regulatory_constraints": "None (internal efficiency tool)",
+  "vendor": "",
+  "annual_cost": 0.0,
+  "capabilities_required": [],
+  "seeded_from": "Appendix A \u2014 Use Case Taxonomy",
+  "created_at": "2026-08-12T15:11:51+00:00",
+  "updated_at": "2026-08-12T15:13:20+00:00",
+  "gate_history": [],
+  "appendix_instances": {},
+  "notes": "Derived starting scores: Regulatory Impact 2 \u2014 'Compliance Monitoring'. Public-Facing Exposure 1 \u2014 Category 1. Data Sensitivity 2 \u2014 sources: DMR data, historical trends. Reversibility 2 \u2014 reversible with moderate effort. Community Impact 1. Federal Program Nexus 3 \u2014 'CWA / NPDES'."
+}
