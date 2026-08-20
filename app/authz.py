@@ -64,6 +64,10 @@ class Actor:
     role: Role
     readonly: bool = False
     bureau: str = ""
+    #: Job title, as the person typed it at sign-in. Recorded alongside the name
+    #: in the audit trail, because "who approved this" is a weaker answer than
+    #: "who approved this, and in what capacity".
+    title: str = ""
 
     @property
     def is_council(self) -> bool:
@@ -177,12 +181,18 @@ def guard(actor: Actor, target: Target | str, action: str, *,
     decision = _decide(actor, target, action, owners, current_mode)
 
     log = audit if audit is not None else default_log()
+    # The person's own name and title go into the entry alongside the capacity
+    # they acted in. `actor` stays the stable id so existing entries and any
+    # tooling that reads them keep working; "who did this" is now answerable
+    # without a lookup table that only exists in this build.
     log.append(
         actor=actor.user_id, role=actor.role.value, action=action,
         target=target.value,
         outcome="allowed" if decision.allowed else "denied",
         mode=current_mode.value,
         detail={**(detail or {}),
+                "actor_name": actor.name,
+                "actor_title": actor.title,
                 "reason": decision.reason,
                 "requires_council": decision.requires_council},
     )

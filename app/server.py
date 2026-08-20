@@ -12,7 +12,7 @@ import json
 import mimetypes
 import os
 import traceback
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
@@ -33,24 +33,73 @@ WEB_DIR = Path(__file__).resolve().parent / "web"
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8765"))
 
-#: v1 local roster. Production swaps this for SCDES SSO.
+#: The three levels of authority the framework establishes, and what each may do.
+#:
+#: These are *capacities*, not people. An earlier version shipped three invented
+#: staff — "Liz Alvarez", "Sean Whitaker" — and offered them as a sign-in list.
+#: That was wrong for a record intended to be relied on: it put a fabricated name
+#: into every audit entry, and it invited someone to click a stranger's name and
+#: act as them. The person signing in now supplies their own name and title, and
+#: chooses only the capacity they hold.
+#:
+#: The ids are unchanged because seeded project ownership refers to them.
+#: Production swaps all of this for the agency's own single sign-on.
 ROSTER = {
-    "liz.operator": Actor("liz.operator", "Liz Alvarez", Role.OPERATOR,
+    "liz.operator": Actor("liz.operator", "Operator", Role.OPERATOR,
                           bureau="Water"),
-    "sean.ot": Actor("sean.ot", "Sean Whitaker", Role.OT),
-    "council.cto": Actor("council.cto", "Dana Reyes (CTO)", Role.COUNCIL),
+    "sean.ot": Actor("sean.ot", "Office of Technology", Role.OT),
+    "council.cto": Actor("council.cto", "Council member", Role.COUNCIL),
 }
 DEFAULT_USER = "liz.operator"
 
+#: What the sign-in screen offers: a capacity, plainly described. No names.
+CAPACITIES = [
+    {"id": "liz.operator", "label": "Operator",
+     "does": "Submits and runs projects"},
+    {"id": "sean.ot", "label": "Office of Technology",
+     "does": "Owns the configuration and the risk model"},
+    {"id": "council.cto", "label": "Council member",
+     "does": "Approves gated decisions"},
+]
+
+#: A supplied name is free text from an unauthenticated screen, so it is bounded
+#: and stripped of control characters before it reaches the audit log.
+_NAME_LIMIT = 80
+
+
+def _clean(value: str | None) -> str:
+    text = "".join(ch for ch in (value or "") if ch.isprintable())
+    return text.strip()[:_NAME_LIMIT]
+
 
 def actor_for(params: dict[str, list[str]], headers: Any) -> Actor:
+    """The capacity being acted in, carrying the person's own name and title.
+
+    The capacity decides what is permitted; the name and title decide what the
+    audit trail records. Keeping them separate is the point: someone may not
+    promote themselves to the Council by typing a grander title.
+    """
     user = (params.get("user", [None])[0]
             or headers.get("X-SCDES-User")
             or DEFAULT_USER)
-    return ROSTER.get(user, ROSTER[DEFAULT_USER])
+    actor = ROSTER.get(user, ROSTER[DEFAULT_USER])
+
+    name = _clean(params.get("name", [None])[0] or headers.get("X-SCDES-Name"))
+    title = _clean(params.get("title", [None])[0] or headers.get("X-SCDES-Title"))
+    if not name and not title:
+        return actor
+    # Fall back to the capacity label rather than inventing a person.
+    return replace(actor, name=name or actor.name, title=title)
 
 
 # ------------------------------------------------------------------- handlers
+
+def _tester_email(params: dict, headers: Any) -> str:
+    """The signed-in address, if the browser told us. Used only for the tester
+    bypass — everything else keys off the capacity, not the address."""
+    return (params.get("email", [None])[0]
+            or (headers.get("X-SCDES-Email") if headers else None) or "")
+
 
 def api_state(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
     from app import integrity, vocabulary
@@ -69,7 +118,9 @@ def api_state(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
         "mode": mode_mod.current().value,
         "mode_label": mode_mod.current().label,
         "actor": {"id": actor.user_id, "name": actor.name,
-                  "role": actor.role.value},
+                  "title": actor.title, "role": actor.role.value},
+        # Capacities, not people. The sign-in screen asks for the name.
+        "capacities": CAPACITIES,
         "roster": [{"id": a.user_id, "name": a.name, "role": a.role.value}
                    for a in ROSTER.values()],
         "portfolio": registry.portfolio_summary(),
@@ -79,7 +130,15 @@ def api_state(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
         "oversight": oversight.status(),
         "council_open": len(council.proposals()),
         "framework_version": "v1.0 · adopted 21 July 2026",
+        # Surfaced so the interface can both unlock the gates and show a badge.
+        # A bypassed session that looks identical to a real one is a trap.
+        "tester": _is_tester_request(params),
     }
+
+
+def _is_tester_request(params: dict) -> bool:
+    from app import tenancy
+    return tenancy.is_tester(params.get("email", [""])[0])
 
 
 def api_chat(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
@@ -336,6 +395,92 @@ def api_audit(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
     return {"intact": ok, "message": message, "entries": list(reversed(entries))}
 
 
+# ---------------------------------------------------------------- onboarding
+#
+# These run before anyone has an identity, so they cannot pass through guard() —
+# there is no actor yet. They are kept safe by being narrow: each validates its
+# input, writes one record, and cannot read another agency's container or touch
+# the corpus. See app/tenancy.py for what each check does and does not prove.
+
+def api_tenancy(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    from app import tenancy
+    agency = params.get("agency", [""])[0]
+    out = tenancy.summary()
+    if agency:
+        out["agency"] = tenancy.agency_state(agency)
+    return out
+
+
+def api_register_agency(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    from app import tenancy
+    return tenancy.start_registration(
+        agency=str(body.get("agency", "")), name=str(body.get("name", "")),
+        title=str(body.get("title", "")), email=str(body.get("email", "")),
+        phone=str(body.get("phone", "")), attested=bool(body.get("attested")),
+    )
+
+
+def api_verify_agency(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    from app import tenancy
+    return tenancy.verify_code(str(body.get("email", "")),
+                               str(body.get("code", "")))
+
+
+def api_agency_access(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    """What this address may see. The gate the whole interface reads."""
+    from app import tenancy
+    return tenancy.access_for(params.get("email", [""])[0])
+
+
+def api_agency_approve(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    """The human step. Confirms delegated authority, which no check can infer.
+
+    Council-only in this build, and audited. In a hosted product this is IIA's
+    review queue rather than something inside the agency's own container.
+    """
+    from app import tenancy
+    decision = guard(actor, Target.CONFIG, "approve_agency_registration",
+                     detail={"agency": body.get("agency", "")})
+    if not decision.allowed:
+        return {"ok": False, "error": decision.reason}
+    return tenancy.approve(str(body.get("agency", "")),
+                           reviewer=f"{actor.name} ({actor.title})".strip(),
+                           note=str(body.get("note", "")))
+
+
+def api_agency_add_member(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    from app import tenancy
+    return tenancy.add_member(
+        agency=str(body.get("agency", "")), by_email=str(body.get("by", "")),
+        name=str(body.get("name", "")), title=str(body.get("title", "")),
+        email=str(body.get("email", "")),
+    )
+
+
+def api_framework(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    from app import framework
+    return framework.summary()
+
+
+def api_framework_adopt(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    """Record that a body with authority adopted the loaded framework.
+
+    Council-only, and audited either way. Recording an adoption is itself a
+    governance act — if anyone could do it, the distinction between "loaded" and
+    "adopted" would be worth nothing.
+    """
+    from app import framework
+    decision = guard(actor, Target.CONFIG, "record_framework_adoption",
+                     detail={"adopted_on": body.get("adopted_on", "")})
+    if not decision.allowed:
+        return {"ok": False, "error": decision.reason}
+    return framework.record_adoption(
+        actor_name=actor.name, actor_title=actor.title,
+        adopted_on=str(body.get("adopted_on", "")),
+        note=str(body.get("note", "")),
+    )
+
+
 def api_portals(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
     from app import onboarding
     return onboarding.summary()
@@ -363,6 +508,14 @@ def api_register(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
 
 
 ROUTES: dict[tuple[str, str], Callable[..., dict[str, Any]]] = {
+    ("GET", "/api/tenancy"): api_tenancy,
+    ("POST", "/api/agency/register"): api_register_agency,
+    ("POST", "/api/agency/verify"): api_verify_agency,
+    ("GET", "/api/agency/access"): api_agency_access,
+    ("POST", "/api/agency/approve"): api_agency_approve,
+    ("POST", "/api/agency/member"): api_agency_add_member,
+    ("GET", "/api/framework"): api_framework,
+    ("POST", "/api/framework/adopt"): api_framework_adopt,
     ("GET", "/api/portals"): api_portals,
     ("POST", "/api/register"): api_register,
     ("GET", "/api/state"): api_state,

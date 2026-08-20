@@ -113,6 +113,7 @@ function startTour(force) {
   if (!TOUR.steps.length) return;
   TOUR.at = 0;
   document.getElementById("tour").hidden = false;
+  document.getElementById("tourCard").hidden = false;   // now a separate element
   document.body.classList.add("tour-open");
   drawTour();
   if (force) { try { localStorage.setItem("scdes.tour", "seen"); } catch (e) {} }
@@ -120,6 +121,7 @@ function startTour(force) {
 
 function endTour() {
   document.getElementById("tour").hidden = true;
+  document.getElementById("tourCard").hidden = true;
   document.body.classList.remove("tour-open");
   document.querySelectorAll(".tour-lit").forEach((n) =>
     n.classList.remove("tour-lit"));
@@ -179,10 +181,16 @@ function drawTour() {
   document.getElementById("tourNext").focus();
 }
 
-/** Put the card beside the target, and keep it on screen. */
+/** Put the card next to the target without covering it.
+
+    Below, then above, then beside. The "beside" case is what the left-hand rail
+    needs: it is nearly the full height of the window, so there is no room above
+    or below, and centring the card vertically drops it straight on top of the
+    thing being explained. */
 function placeTourCard(card, box) {
   const W = window.innerWidth, H = window.innerHeight;
-  const cw = Math.min(340, W - 32);
+  const gap = 12, edge = 12;
+  const cw = Math.min(340, W - edge * 2);
   card.style.width = `${cw}px`;
 
   // Measure after sizing, since the height depends on how the body wraps.
@@ -190,15 +198,29 @@ function placeTourCard(card, box) {
   card.style.top = "0px"; card.style.left = "0px";
   const ch = card.getBoundingClientRect().height;
 
-  const below = box.top + box.height + 12;
-  const above = box.top - ch - 12;
-  let top = below + ch < H - 12 ? below : (above > 12 ? above : (H - ch) / 2);
-  let left = box.left + box.width / 2 - cw / 2;
-  left = Math.max(16, Math.min(left, W - cw - 16));
-  top = Math.max(12, Math.min(top, H - ch - 12));
+  const fitsBelow = box.top + box.height + gap + ch < H - edge;
+  const fitsAbove = box.top - gap - ch > edge;
+  const fitsRight = box.left + box.width + gap + cw < W - edge;
+  const fitsLeft = box.left - gap - cw > edge;
 
-  card.style.top = `${top}px`;
-  card.style.left = `${left}px`;
+  let top, left;
+  if (fitsBelow || fitsAbove) {
+    top = fitsBelow ? box.top + box.height + gap : box.top - gap - ch;
+    left = box.left + box.width / 2 - cw / 2;
+  } else if (fitsRight || fitsLeft) {
+    left = fitsRight ? box.left + box.width + gap : box.left - gap - cw;
+    // Align near the top of a tall target rather than its centre, so the card
+    // sits beside the part of it the reader is looking at.
+    top = Math.min(box.top, H - ch - edge);
+  } else {
+    // Nowhere clear: centre it and accept the overlap. The card is above the
+    // spotlight in the stacking order, so it stays readable.
+    top = (H - ch) / 2;
+    left = (W - cw) / 2;
+  }
+
+  card.style.left = `${Math.max(edge, Math.min(left, W - cw - edge))}px`;
+  card.style.top = `${Math.max(edge, Math.min(top, H - ch - edge))}px`;
   card.style.visibility = "visible";
 }
 

@@ -11,6 +11,56 @@
 
 const ONB = { portals: [], suffixes: [], portal: null, notice: "" };
 
+/* ------------------------------------------------------------ tester access
+
+   Testing the platform meant completing onboarding first, because the tester
+   check keys off the address stored during registration. That is circular when
+   the thing you want to test is everything *after* onboarding.
+
+   So the address can be set directly:
+
+       http://…/?tester=lokesh@iiac.ai      once, from the address bar
+       becomeTester("lokesh@iiac.ai")       any time, from the console
+       clearTester()                        back to a normal session
+
+   This is not a way in. It only says *which* address to present; the server
+   still checks it against the allowlist in app/tenancy.py, which is locked to
+   the iiac.ai domain and emptied by IIA_TESTERS=none. Naming an address that is
+   not on that list unlocks nothing. */
+
+function becomeTester(email) {
+  const address = String(email || "").trim().toLowerCase();
+  if (!address) { console.warn("becomeTester needs an email"); return; }
+  try {
+    localStorage.setItem("scdes.registration", JSON.stringify({
+      email: address, portal: "government", domain: address.split("@")[1] || "",
+      evidence: "tester", tester: true,
+    }));
+    // Skip the parts that only get in the way of repeated testing.
+    localStorage.setItem("scdes.welcomeSeen", "1");
+  } catch (e) { console.warn(e); }
+  location.replace(location.pathname);      // drop the query, reload clean
+}
+
+function clearTester() {
+  try {
+    localStorage.removeItem("scdes.registration");
+    localStorage.removeItem("scdes.signin");
+    localStorage.removeItem("scdes.welcomeSeen");
+  } catch (e) {}
+  location.replace(location.pathname);
+}
+
+// Runs before anything reads the stored registration, which is why this lives
+// at the top of the first script rather than in app.js.
+(function readTesterParam() {
+  const asked = new URLSearchParams(location.search).get("tester");
+  if (asked) becomeTester(asked);
+})();
+
+window.becomeTester = becomeTester;
+window.clearTester = clearTester;
+
 const onbEsc = (s) => String(s ?? "").replace(/[&<>"]/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 

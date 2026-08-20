@@ -272,6 +272,35 @@ function showFlag(code, entry) {
   pop.classList.add("in");
 }
 
+/* A state is not one governmental unit. Once a state is picked, the person says
+   which agency they belong to — environmental services and education each run
+   their own governance and use their own email convention, so the choice decides
+   which rules the registration is checked against. */
+function agencyPicker(s) {
+  if (!s.open_for_registration) {
+    return `<span class="lnch-closed">Not open for registration yet. ` +
+           `${escHtml(s.state)} opens once its agencies and their email ` +
+           `conventions have been confirmed.</span>`;
+  }
+  const list = s.agencies || [];
+  if (!list.length) {
+    return `<span class="lnch-closed">No agencies recorded for ` +
+           `${escHtml(s.state)} yet.</span>`;
+  }
+  return `
+    <label class="lnch-agency">
+      <span>Select your agency</span>
+      <select id="agencyPick">
+        <option value="">Choose…</option>
+        ${list.map((a) => `<option value="${escHtml(a.id)}"
+          data-domain="${escHtml(a.domain)}">${escHtml(a.name)}${
+          a.test_only ? " (testing)" : ""}</option>`).join("")}
+      </select>
+    </label>
+    <span class="lnch-agency-hint" id="agencyHint">
+      Your work email must be on that agency's domain.</span>`;
+}
+
 /** Re-show the flag for whatever is selected — after reopening or a resize. */
 function refreshFlag() {
   const code = LNCH.active;
@@ -289,11 +318,22 @@ function buildLauncher() {
 
   const codes = Object.keys(map.states);
   const clip = codes.map((c) => `<path d="${map.states[c].d}"/>`).join("");
+  /* Only states open for registration are selectable. The rest are drawn — so
+     the reach is visible — but greyed and not focusable, because letting someone
+     start a registration the platform cannot honour is worse than showing them
+     it is not their turn yet. A state opens once its agencies and their email
+     conventions have actually been confirmed. */
   const shapes = codes.map((c) => {
     const s = byCode[c];
-    const title = s ? `${s.state} — ${s.agency}` : (map.states[c].name || c);
-    return `<path class="st${s && s.corpus_loaded ? " has-corpus" : ""}" ` +
-           `data-code="${c}" d="${map.states[c].d}" tabindex="0" role="button" ` +
+    const open = s && s.open_for_registration;
+    const title = !s ? (map.states[c].name || c)
+      : open ? `${s.state} — ${(s.agencies || []).length} agenc${
+                 (s.agencies || []).length === 1 ? "y" : "ies"} available`
+             : `${s.state} — not open yet`;
+    return `<path class="st${open ? "" : " st-closed"}` +
+           `${s && s.corpus_loaded ? " has-corpus" : ""}" ` +
+           `data-code="${c}" d="${map.states[c].d}" ` +
+           (open ? `tabindex="0" role="button" ` : `aria-disabled="true" `) +
            `aria-label="${escHtml(title)}"><title>${escHtml(title)}</title></path>`;
   }).join("");
 
@@ -351,7 +391,7 @@ function buildLauncher() {
     </div>
     <div class="signin" id="signinPanel" hidden></div>`;
 
-  host.querySelectorAll(".st").forEach((p) => {
+  host.querySelectorAll(".st:not(.st-closed)").forEach((p) => {
     p.addEventListener("click", () => selectState(p.dataset.code));
 
     // Double-click opens the agency and closes the map — the same thing Enter
@@ -439,12 +479,10 @@ function selectState(code, announce = true) {
     <div class="who">
       <small>${escHtml(s.state)}</small>
       <div class="who-line">
-        <b>${escHtml(s.agency)}</b>
+        <b>${escHtml(s.state)}</b>
         <button class="mode-chip" type="button" aria-pressed="false"></button>
       </div>
-      <span>${escHtml(s.abbrev)} · ${s.corpus_loaded
-          ? "corpus loaded — name confirmed by its own documents"
-          : "no corpus loaded — agency name unverified"}</span>
+      ${agencyPicker(s)}
       <div class="lnch-swatches">${swatches}</div>
     </div>
     <div class="lnch-actions">
@@ -456,6 +494,26 @@ function selectState(code, announce = true) {
 
   // The panel is rebuilt on every selection, so its toggle needs relabelling.
   applyMode(colorMode(), false);
+
+  // Remember the agency and tell the reader which domain it expects, so the
+  // email rule is visible before they hit it rather than after.
+  const pick = document.getElementById("agencyPick");
+  if (pick) {
+    pick.value = LNCH.agency || "";
+    pick.onchange = () => {
+      LNCH.agency = pick.value;
+      const opt = pick.selectedOptions[0];
+      const hint = document.getElementById("agencyHint");
+      if (hint) {
+        hint.textContent = pick.value
+          ? `Your work email must end in @${opt.dataset.domain}`
+          : "Your work email must be on that agency's domain.";
+      }
+      const go = document.getElementById("lnchEnter");
+      if (go) go.disabled = !pick.value;
+    };
+    pick.onchange();
+  }
 
   document.getElementById("lnchEnter").onclick = () => enterAgency(code);
   const why = document.getElementById("lnchWhy");
@@ -492,36 +550,55 @@ function showSignin(entry) {
   const inner = document.querySelector(".lnch-inner");
   if (!panel || !inner) return;
 
-  const roster = (LNCH.roster || []);
-  const current = LNCH.actor && LNCH.actor.id;
+  /* The person types their own name and title. Nothing is pre-filled.
+
+     The earlier version listed three invented staff to pick from, which meant a
+     fabricated name landed in every audit entry — and invited someone to click a
+     stranger's name and act as them. What is offered here is only the *capacity*
+     being acted in, because that is what the framework actually grants. */
+  const caps = (LNCH.capacities || []);
+  const saved = signinRemembered();
 
   panel.innerHTML = `
     <div class="signin-card" role="dialog" aria-modal="true"
          aria-labelledby="signinTitle">
       <p class="signin-eyebrow">${escHtml(entry.state)}</p>
       <h2 id="signinTitle">${escHtml(entry.agency)}</h2>
-      <p class="signin-lede">Who is signing in? Every governed action is
-        recorded against this person, and what you may do follows from their
-        role.</p>
+      <p class="signin-lede">Every governed action is recorded against your name
+        and title, so please enter your own.</p>
 
-      <div class="signin-list" role="radiogroup" aria-label="Choose who you are">
-        ${roster.map((r, i) => `
-          <button class="signin-who${r.id === current || (!current && !i)
+      <label class="signin-field">
+        <span>Your name</span>
+        <input id="signinName" type="text" autocomplete="name" spellcheck="false"
+               placeholder="" value="${escHtml(saved.name || "")}">
+      </label>
+      <label class="signin-field">
+        <span>Your title</span>
+        <input id="signinRole" type="text" autocomplete="organization-title"
+               spellcheck="false" placeholder=""
+               value="${escHtml(saved.title || "")}">
+      </label>
+
+      <p class="signin-caps-label">Acting as</p>
+      <div class="signin-list" role="radiogroup" aria-label="Capacity you hold">
+        ${caps.map((c, i) => `
+          <button class="signin-who${(saved.id ? c.id === saved.id : !i)
             ? " on" : ""}" type="button" role="radio"
-            aria-checked="${r.id === current || (!current && !i)}"
-            data-id="${escHtml(r.id)}">
-            <span class="signin-ava">${escHtml(initials(r.name))}</span>
+            aria-checked="${(saved.id ? c.id === saved.id : !i)}"
+            data-id="${escHtml(c.id)}">
             <span class="signin-who-text">
-              <b>${escHtml(r.name)}</b>
-              <small>${escHtml(roleLabel(r.role))}</small>
+              <b>${escHtml(c.label)}</b>
+              <small>${escHtml(c.does)}</small>
             </span>
           </button>`).join("")}
       </div>
 
-      <p class="signin-warn">This build identifies you against
-        ${escHtml(entry.abbrev)}'s local roster. It does not verify identity —
-        there is no password and no session. In production this step is the
-        agency's own single sign-on.</p>
+      <p class="signin-error" id="signinError" hidden></p>
+
+      <p class="signin-warn">Your name and title are recorded as entered — they
+        are not checked against anything, and there is no password. In production
+        this step is ${escHtml(entry.abbrev)}'s own single sign-on. What you may
+        do comes from the capacity above, not from the title you type.</p>
 
       <div class="signin-actions">
         <button class="btn ghost" id="signinBack" type="button">Back to map</button>
@@ -532,7 +609,7 @@ function showSignin(entry) {
   inner.hidden = true;
   panel.hidden = false;
 
-  let chosen = (roster.find((r) => r.id === current) || roster[0] || {}).id;
+  let chosen = saved.id || (caps[0] || {}).id;
   panel.querySelectorAll(".signin-who").forEach((b) => {
     b.onclick = () => {
       chosen = b.dataset.id;
@@ -543,28 +620,44 @@ function showSignin(entry) {
     };
   });
 
+  const nameBox = document.getElementById("signinName");
+  const error = document.getElementById("signinError");
+  nameBox.oninput = () => { error.hidden = true; };
+  nameBox.onkeydown = (e) => {
+    if (e.key === "Enter") document.getElementById("signinGo").click();
+  };
+
   document.getElementById("signinBack").onclick = () => showMap();
-  document.getElementById("signinGo").onclick = () => finishSignin(chosen);
+  document.getElementById("signinGo").onclick = () => {
+    const name = nameBox.value.trim();
+    if (!name) {
+      // Refusing here is the whole point: an unnamed entry in the trail is worse
+      // than no entry, because it looks like a record and answers nothing.
+      error.textContent = "Please enter your name — it goes on the record.";
+      error.hidden = false;
+      nameBox.focus();
+      return;
+    }
+    finishSignin(chosen, name,
+                 document.getElementById("signinRole").value.trim());
+  };
 
-  const first = panel.querySelector(".signin-who.on") ||
-                panel.querySelector(".signin-who");
-  if (first) first.focus();
+  nameBox.focus();
 }
 
-const initials = (name) => String(name || "?").split(/\s+/)
-  .map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-
-/** The roster stores machine roles; people read titles. */
-function roleLabel(role) {
-  return ({ "operator": "Operator — submits and runs projects",
-            "ot": "Office of Technology — owns the configuration",
-            "council-member": "Council member — approves gated decisions",
-          })[role] || role;
+/** What this browser last signed in as, so a returning user need not retype. */
+function signinRemembered() {
+  try { return JSON.parse(localStorage.getItem("scdes.signin") || "{}") || {}; }
+  catch (e) { return {}; }
 }
 
-async function finishSignin(id) {
+async function finishSignin(id, name, title) {
+  try {
+    localStorage.setItem("scdes.signin", JSON.stringify({ id, name, title }));
+  } catch (e) { /* private mode — they retype next visit */ }
+
   if (id && window.signInAs) {
-    try { await window.signInAs(id); } catch (e) { console.warn(e); }
+    try { await window.signInAs(id, name, title); } catch (e) { console.warn(e); }
   }
   showMap();
   closeLauncher();
@@ -657,11 +750,11 @@ async function initLauncher() {
   // down with it — a picker that still works is better than a blank page.
   try {
     const state = await fetch("/api/state?user=" + user).then((r) => r.json());
-    LNCH.roster = state.roster || [];
+    LNCH.capacities = state.capacities || [];
     LNCH.actor = state.actor || null;
   } catch (e) {
-    LNCH.roster = [];
-    console.warn("[launcher] roster unavailable; sign-in will be empty", e);
+    LNCH.capacities = [];
+    console.warn("[launcher] capacities unavailable; sign-in will be empty", e);
   }
   buildLauncher();
 

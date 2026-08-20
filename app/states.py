@@ -51,6 +51,43 @@ TILE_GRID: list[list[str]] = [
 
 #: Commonly used name of each state's environmental agency. Seeded so the
 #: launcher is not empty; every entry is unverified until a corpus confirms it.
+#: States open for registration. Everything else is drawn on the map but cannot
+#: be selected — visible so the reach is obvious, greyed so nobody starts a
+#: registration the platform cannot yet honour.
+#:
+#: A state opens when its agencies and their email conventions have actually been
+#: confirmed. Guessing them would refuse real staff at the door.
+LAUNCH_STATES: set[str] = {"SC"}
+
+#: The governmental units inside a launched state. A state is not one agency:
+#: environmental services, education and the rest each run their own governance,
+#: each with their own email convention.
+#:
+#: Only what has been confirmed appears here. This list is what the "select your
+#: agency" dropdown offers, so an omission is better than an invention.
+STATE_AGENCIES: dict[str, list[dict[str, str]]] = {
+    "SC": [
+        {"id": "sc.des", "name": "South Carolina Department of Environmental Services",
+         "abbrev": "SCDES", "domain": "des.sc.gov", "convention": "first.last"},
+        {"id": "sc.ed", "name": "South Carolina Department of Education",
+         "abbrev": "SCDE", "domain": "ed.sc.gov", "convention": "flast"},
+        # For IIA's own testing. Named as such so it is never mistaken for a
+        # real governmental unit in a screenshot or a demo.
+        {"id": "iia.test", "name": "TEST agency — Innovative Infrastructure Advising",
+         "abbrev": "TEST", "domain": "iiac.ai", "convention": "first.last",
+         "test_only": "yes"},
+    ],
+}
+
+
+def agencies_for(code: str) -> list[dict[str, str]]:
+    return STATE_AGENCIES.get((code or "").upper(), [])
+
+
+def is_open(code: str) -> bool:
+    return (code or "").upper() in LAUNCH_STATES
+
+
 AGENCIES: dict[str, tuple[str, str]] = {
     "AL": ("Alabama Department of Environmental Management", "ADEM"),
     "AK": ("Alaska Department of Environmental Conservation", "ADEC"),
@@ -250,6 +287,9 @@ class StateEntry:
     is_brand: bool = False          # true only when a brand document backs it
     provenance: str = "generated"   # brand | scraped | documented | generated
     caveat: str = ""
+    #: Whether this state can be registered yet, and which units it contains.
+    open_for_registration: bool = False
+    agencies: list[dict[str, str]] = dc_field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -313,6 +353,8 @@ def entry(code: str) -> StateEntry:
         is_brand=provenance == "brand",
         provenance=provenance,
         caveat=caveat,
+        open_for_registration=is_open(code),
+        agencies=agencies_for(code),
     )
 
 

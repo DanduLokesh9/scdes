@@ -43,6 +43,11 @@
   </button>
 
   <div class="tb-right">
+    <!-- Shown only for a tester bypass. A session with the gates open must be
+         obviously different from a real one, in screenshots and demos alike. -->
+    <span class="tb-chip tester-chip" id="testerChip" hidden
+      title="Approval was skipped for this address. Not how a real registration behaves.">
+      ⚑ TESTER</span>
     <button class="tb-chip tour-chip" id="tourChip" type="button"
       title="Take a guided tour of the application">? Guide</button>
     <button class="tb-chip mode-chip" id="modeToggle" type="button"
@@ -65,26 +70,32 @@
 
 <div class="shell">
   <nav class="rail" aria-label="Sections">
-    <button class="rail-item rail-launch" id="railLaunch" type="button">
-      <i>🗺</i>Choose agency<span class="tag">MAP</span></button>
-
-    <p class="rail-eyebrow">Operating</p>
-    <button class="rail-item" data-view="vision"><i>◆</i>Vision</button>
-    <button class="rail-item" data-view="registry"><i>▤</i>Registry</button>
-    <button class="rail-item" data-view="workflow"><i>⇢</i>Lifecycle</button>
-    <button class="rail-item" data-view="budget"><i>▮</i>Budget</button>
-    <button class="rail-item" data-view="oversight"><i>◈</i>Oversight</button>
-    <button class="rail-item" data-view="process"><i>§</i>Process</button>
-
+    <!-- The framework comes first because everything else is read out of it.
+         There is no agency switcher: the agency is chosen once at onboarding and
+         is not something to flick between mid-session. -->
+    <!-- Authoring first: building the framework is the whole job until it is
+         done. Everything below it is a paid subscription that only opens once
+         governance exists, so it is shown greyed rather than hidden — you can
+         see what you are working towards. -->
     <p class="rail-eyebrow">Authoring</p>
-    <button class="rail-item" data-view="setup"><i>⚙</i>Terminology<span class="tag">OT</span></button>
-    <button class="rail-item" data-view="configure"><i>◎</i>Configure<span class="tag">OT</span></button>
-    <button class="rail-item" data-view="council"><i>⚖</i>Council<span class="tag">GATED</span></button>
+    <button class="rail-item rail-framework" data-view="framework">
+      <i>◈</i>Framework<span class="tag" id="fwTag">—</span></button>
+    <button class="rail-item" data-view="setup"><i>⚙</i>Terminology</button>
+    <button class="rail-item" data-view="configure"><i>◎</i>Configure</button>
+    <button class="rail-item" data-view="council"><i>⚖</i>Council</button>
 
-    <p class="rail-eyebrow">Assurance</p>
+    <p class="rail-eyebrow">Operating <span class="rail-badge">subscription</span></p>
+    <button class="rail-item" data-view="vision" data-paid="1"><i>◆</i>Vision</button>
+    <button class="rail-item" data-view="registry" data-paid="1"><i>▤</i>Registry</button>
+    <button class="rail-item" data-view="workflow" data-paid="1"><i>⇢</i>Lifecycle</button>
+    <button class="rail-item" data-view="budget" data-paid="1"><i>▮</i>Budget</button>
+    <button class="rail-item" data-view="oversight" data-paid="1"><i>◈</i>Oversight</button>
+    <button class="rail-item" data-view="process" data-paid="1"><i>§</i>Process</button>
+
+    <p class="rail-eyebrow">Assurance <span class="rail-badge">subscription</span></p>
     <button class="rail-item" data-view="agency"><i>◱</i>Agency profile</button>
-    <button class="rail-item" data-view="integrity"><i>✓</i>Integrity</button>
-    <button class="rail-item" data-view="audit"><i>⛓</i>Audit trail</button>
+    <button class="rail-item" data-view="integrity" data-paid="1"><i>✓</i>Integrity</button>
+    <button class="rail-item" data-view="audit" data-paid="1"><i>⛓</i>Audit trail</button>
   </nav>
 
   <main class="record" id="record">
@@ -127,15 +138,24 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!-- The 60-second welcome. Shown once, before anything else, because the one
+     thing a new user must understand is that the framework comes first. -->
+<div class="welcome" id="welcome" hidden></div>
+
 <!-- Guided tour: a spotlight over the real interface rather than a video or a
      screenshot, so what is being explained is the thing in front of you. -->
 <div class="tour" id="tour" hidden>
   <div class="tour-mask" id="tourMask"></div>
-  <div class="tour-card" id="tourCard" role="dialog" aria-modal="true"
-       aria-labelledby="tourTitle"></div>
 </div>
+<!-- The card is a sibling of #tour, not a child, and deliberately so. #tour
+     creates a stacking context, which traps its children's z-index inside it —
+     and the spotlit element is lifted above #tour to escape the dark mask, so it
+     painted over the card. At the top level the card can sit above both. -->
+<div class="tour-card" id="tourCard" role="dialog" aria-modal="true"
+     aria-labelledby="tourTitle" hidden></div>
 
 <script src="/assets/onboard.js"></script>
+<script src="/assets/welcome.js"></script>
 <script src="/assets/launcher.js"></script>
 <script src="/assets/tour.js"></script>
 <script src="/assets/app.js"></script>

@@ -22,10 +22,31 @@ const cls = (b) => String(b || "").toLowerCase();
 const vlabel = (concept, key) =>
   (S.vocab[concept] && S.vocab[concept][String(key).toLowerCase()]) || String(key);
 
+/** The address this browser registered with, if any. */
+function registeredEmail() {
+  try {
+    return (JSON.parse(localStorage.getItem("scdes.registration") || "{}")
+            || {}).email || "";
+  } catch (e) { return ""; }
+}
+
 async function api(p, opts = {}) {
   const sep = p.includes("?") ? "&" : "?";
-  const r = await fetch(p + sep + "user=" + encodeURIComponent(S.user), {
-    headers: { "Content-Type": "application/json", "X-SCDES-User": S.user }, ...opts });
+  // Name and title travel as headers on every request, because the audit entry
+  // is written server-side at the moment of the action — if they were only sent
+  // at sign-in, every later entry would fall back to the bare capacity label.
+  const headers = {
+    "Content-Type": "application/json",
+    "X-SCDES-User": S.user,
+  };
+  if (S.actorName) headers["X-SCDES-Name"] = S.actorName;
+  if (S.actorTitle) headers["X-SCDES-Title"] = S.actorTitle;
+  // The registered address, only so the server can recognise a tester.
+  const reg = registeredEmail();
+  if (reg) headers["X-SCDES-Email"] = reg;
+  const qs = "user=" + encodeURIComponent(S.user) +
+             (reg ? "&email=" + encodeURIComponent(reg) : "");
+  const r = await fetch(p + sep + qs, { headers, ...opts });
   return r.json();
 }
 const post = (p, b) => api(p, { method: "POST", body: JSON.stringify(b) });
@@ -60,6 +81,8 @@ function reason(blocks) {
 /* ---------------------------------------------------------------- shell */
 
 const META = {
+  home:      ["Welcome", "What this is, why it matters, and what happens next."],
+  framework: ["Framework", "The adopted documents everything else is read out of. Load them here first."],
   vision:    ["Vision", "Where the agency intends to get to, and how the pipeline gets there."],
   registry:  ["Registry", "Every AI system as a tracked project — stage, owners, risk and review schedule."],
   workflow:  ["Lifecycle", "The gate's checklist, the instruments due, and the form that writes the real workbook."],
@@ -91,11 +114,20 @@ async function refreshState() {
     : "Integrity clear";
   ig.className = "tb-chip" + (crit ? " bad" : " live");
 
+  const tchip = $("#testerChip");
+  if (tchip) tchip.hidden = !st.tester;
+
   $("#avatar").textContent = st.actor.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
+  $("#avatar").title = st.actor.title
+    ? `${st.actor.name} — ${st.actor.title}` : st.actor.name;
+
+  // The picker switches *capacity*, not person — the person is whoever signed
+  // in. Built from `capacities`, so no invented names appear anywhere.
   const pick = $("#userPick");
   if (!pick.options.length)
-    st.roster.forEach((r) => {
-      const o = el("option"); o.value = r.id; o.textContent = r.role; pick.appendChild(o);
+    (st.capacities || []).forEach((c) => {
+      const o = el("option"); o.value = c.id; o.textContent = c.label;
+      pick.appendChild(o);
     });
   pick.value = st.actor.id;
   await renderSpine();
@@ -142,6 +174,311 @@ function agencyHasCorpus() {
   return !a || a.corpus_loaded;      // no selection yet == the loaded default
 }
 
+/* ------------------------------------------------------- the framework gate
+
+   The framework is the brain: the risk model, the gates, the vocabulary and the
+   required instruments are all read out of it. Without one there is nothing to
+   read, so every other screen would be showing structure the agency never
+   agreed to — worse than an empty screen, because it looks authoritative.
+
+   So: one section reachable, and it explains itself. */
+
+const FRAMEWORK_EXEMPT = new Set(["home", "framework", "agency"]);
+
+function frameworkReady() {
+  return !S.framework || S.framework.usable;
+}
+
+async function refreshFramework() {
+  try { S.framework = await api("/api/framework"); }
+  catch (e) { S.framework = null; }
+  paintFrameworkState();
+}
+
+/** The rail reflects the gate, so nothing looks clickable that is not. */
+function paintFrameworkState() {
+  const f = S.framework;
+  const tag = $("#fwTag");
+  if (tag && f) {
+    tag.textContent = { none: "SET UP", draft: "DRAFT", adopted: "LIVE" }[f.state] || "—";
+    tag.className = "tag " + (f.state === "adopted" ? "ok"
+                             : f.state === "draft" ? "warn" : "bad");
+  }
+  /* Two different reasons a section can be shut, and they are not the same
+     thing — so they do not look the same or say the same thing.
+
+       needs the framework — you can open it by finishing the authoring work
+       needs a subscription — you cannot, and no amount of clicking will help
+
+     Both stay visible. Hiding them would leave someone wondering where the
+     product went; greying them shows what the work leads to. */
+  const tester = !!(S.state && S.state.tester);
+  const adopted = tester || (f && f.state === "adopted");
+  document.querySelectorAll(".rail-item[data-view]").forEach((b) => {
+    const paid = b.dataset.paid === "1";
+    const needsFramework = !tester && !frameworkReady() && !FRAMEWORK_EXEMPT.has(b.dataset.view);
+    const needsSub = paid && !adopted;
+    const off = needsFramework || needsSub;
+    b.classList.toggle("rail-locked", off);
+    b.disabled = off;
+    b.title = needsSub
+      ? "Available once your governance framework is complete"
+      : needsFramework ? "Load your governance framework first" : "";
+  });
+}
+
+/* The seven-step lifecycle, shown on landing so someone understands what they
+   are doing and why before they are asked to do any of it.
+
+   Authored by IIA — the provenance line on every generated draft says so, and
+   it is repeated here rather than left implicit. */
+const LIFECYCLE = [
+  { n: 1, name: "Establish authority",
+    what: "Leadership determines that AI carries both real opportunity and real risk, and creates a body with the standing to govern it." },
+  { n: 2, name: "Define the rules",
+    what: "The framework itself: scope, definitions, principles, permitted uses, and who decides what." },
+  { n: 3, name: "Classify the work",
+    what: "Every proposed system is sorted by risk, using factors the agency has agreed on rather than instinct." },
+  { n: 4, name: "Review and approve",
+    what: "Proposals pass through gates. Higher risk means a higher bar and a named approver." },
+  { n: 5, name: "Deploy with conditions",
+    what: "Approval carries obligations — monitoring, disclosure, human review — written down before launch, not after." },
+  { n: 6, name: "Measure and oversee",
+    what: "Value and harm are both tracked. Incidents have levels, timelines and owners set in advance." },
+  { n: 7, name: "Renew or retire",
+    what: "Nothing runs indefinitely on its original approval. Each system is re-examined, renewed, or shut down." },
+];
+
+/* Taken from the purpose section of the reference framework, with the agency's
+   own name substituted. Deliberately parameterised: this text must never name
+   another agency to the reader. */
+function purposeText(agencyName, stateName) {
+  const unit = agencyName || "your governmental unit";
+  const where = stateName || "your state";
+  return `The creation and adoption of an enterprise-wide Artificial ` +
+    `Intelligence Governance Framework is used to establish the evaluation, ` +
+    `approval, deployment, measurement of value, and ongoing oversight of ` +
+    `artificial intelligence systems within governmental units in ${where}. ` +
+    `Its adoption will reflect a determination by your leadership that AI ` +
+    `presents both meaningful opportunity and material risk for a governmental ` +
+    `unit. Where artificial intelligence is a nascent and emerging technology, ` +
+    `one which is only beginning to enter operational deployment in ` +
+    `governmental settings, this framework and associated policies and ` +
+    `procedures have been created in an attempt to support the ethical, ` +
+    `responsible, measurable, and efficient deployment of this technology for ` +
+    `your employees and the citizens you serve. The goal of this framework is ` +
+    `to create standards which help your colleagues and the public feel ` +
+    `confident that ${unit} is putting its best faith efforts into this ` +
+    `endeavor.`;
+}
+
+const VIEW_HOME = async () => {
+  const f = S.framework || await api("/api/framework");
+  S.framework = f;
+  const agencyName = (window.SCDES_AGENCY && window.SCDES_AGENCY.agency) || "";
+  const stateName = (window.SCDES_AGENCY && window.SCDES_AGENCY.state) || "";
+  const root = el("div");
+
+  const intro = el("div", "panel");
+  intro.innerHTML = `
+    <h3 class="sub3" style="margin-top:0">Why you are here</h3>
+    <p class="intro">${esc(purposeText(agencyName, stateName))}</p>`;
+  root.appendChild(intro);
+
+  const steps = el("div", "panel");
+  steps.innerHTML = `
+    <h3 class="sub3" style="margin-top:0">The seven-step AI governance lifecycle</h3>
+    <p class="intro">Step 2 is what you build here. Everything after it depends
+      on it existing, which is why the rest stays closed until it does.</p>
+    <div class="lifecycle">
+      ${LIFECYCLE.map((s) => `
+        <div class="lc-step${s.n === 2 ? " lc-now" : ""}">
+          <span class="lc-n">${s.n}</span>
+          <div>
+            <div class="lc-name">${esc(s.name)}${
+              s.n === 2 ? ` <span class="pill warn">you are here</span>` : ""}</div>
+            <div class="lc-what">${esc(s.what)}</div>
+          </div>
+        </div>`).join("")}
+    </div>
+    <p class="small muted" style="margin-top:12px">
+      The seven-step governance framework referenced throughout was authored by
+      IIA — Innovative Infrastructure Advising, LLC.</p>`;
+  root.appendChild(steps);
+
+  const next = el("div", "panel");
+  next.innerHTML = `
+    <h3 class="sub3" style="margin-top:0">What happens next</h3>
+    <p class="intro">${esc(f.headline)} — ${esc(f.detail)}</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="homeGo" type="button">
+        ${f.state === "none" ? "Start the framework" : "Continue the framework"}</button>
+      <button class="btn ghost" id="homeWatch" type="button">Watch the 60-second intro</button>
+    </div>`;
+  root.appendChild(next);
+
+  $("#view").innerHTML = ""; $("#view").appendChild(root);
+  $("#homeGo").onclick = () => go("framework");
+  $("#homeWatch").onclick = () => window.replayWelcome && window.replayWelcome();
+
+  reason([
+    { title: "Why the framework comes first",
+      body: "Steps 3 to 7 all read from step 2. Classification needs categories; approval needs gates; oversight needs incident levels. Without the rules there is nothing for them to apply.",
+      cite: "Framework §1 (Purpose)" },
+    { title: "Whose framework this is",
+      body: "The rules you build here are your agency's. The reference regime is a worked example to start from and amend, never something adopted on your behalf.",
+      cite: "Framework §1 (Purpose and Authority)" },
+  ]);
+};
+
+const VIEW_FRAMEWORK = async () => {
+  const f = S.framework || await api("/api/framework");
+  S.framework = f;
+  const root = el("div");
+
+  const tone = { none: "bad", draft: "warn", adopted: "ok" }[f.state] || "warn";
+  const head = el("div", "panel");
+  head.innerHTML = `
+    <div class="fw-head">
+      <span class="pill ${tone}">${esc(f.state)}</span>
+      <h3 class="sub3" style="margin:0">${esc(f.headline)}</h3>
+    </div>
+    <p class="intro">${esc(f.detail)}</p>`;
+  root.appendChild(head);
+
+  // What is present, and what each part is for. The "why" matters more than the
+  // tick: someone missing a layer needs to know what it would have given them.
+  const layers = el("div", "panel");
+  layers.innerHTML = `<h3 class="sub3" style="margin-top:0">The four layers</h3>
+    <p class="intro">Each one is read by the one below it. That is the order they
+      have to arrive in.</p>` +
+    f.layers.map((ln) => `
+      <div class="step-row">
+        <span class="step-dot" style="background:var(--${
+          ln.present ? "ok" : ln.required ? "alert" : "line"})"></span>
+        <div class="step-main">
+          <div class="step-name">${esc(ln.label)}
+            ${ln.required ? "" : `<span class="small muted">optional</span>`}</div>
+          <div class="step-why">${esc(ln.why)}</div>
+          ${ln.files.length
+            ? `<div class="small muted mono">${ln.files.map(esc).join(" · ")}</div>`
+            : `<div class="small" style="color:var(--alert)">not loaded</div>`}
+        </div>
+      </div>`).join("");
+  root.appendChild(layers);
+
+  // Two honest routes in. Neither pretends the app can write the framework for
+  // them — that is the agency's document to author and adopt.
+  const routes = el("div", "panel");
+  routes.innerHTML = `<h3 class="sub3" style="margin-top:0">Getting your framework in</h3>
+    <div class="fw-routes">
+      <div class="fw-route">
+        <b>Upload what you have adopted</b>
+        <p class="small">Drop your framework, operations manual and appendices into
+          the <span class="mono">corpus/</span> folder on the server — framework
+          and manual as Word documents, appendices as workbooks. The application
+          reads them on the next start: the agency name, the instruments, the
+          gates, the vocabulary and every citation come from those files.</p>
+        <p class="small muted mono">corpus/framework/ · corpus/manual/ ·
+          corpus/appendices/ · corpus/charter/</p>
+      </div>
+      <div class="fw-route">
+        <b>Start from the reference framework</b>
+        <p class="small">If you are starting out, the SCDES regime is here as a
+          worked reference — a framework, a manual and fourteen appendices that
+          fit together. Copy it, amend it into your own, and adopt that. It is a
+          starting point, not a template to sign as-is.</p>
+        <p class="small muted">Nothing is adopted on your behalf. Adoption is a
+          decision your council takes, and then records here.</p>
+      </div>
+    </div>`;
+  root.appendChild(routes);
+
+  // Recording the adoption. Deliberately separate from loading the files.
+  const adopt = el("div", "panel");
+  if (f.state === "adopted") {
+    adopt.innerHTML = `<h3 class="sub3" style="margin-top:0">Adoption on record</h3>
+      <p class="intro">Recorded as adopted on <b>${esc(f.adopted_on)}</b>${
+        f.adopted_by ? ` by ${esc(f.adopted_by)}` : ""}.
+        ${f.adopted_note ? esc(f.adopted_note) : ""}</p>
+      <p class="small muted">This is the application's record of being told. It
+        does not verify that the adoption happened — the evidence for that is the
+        signed charter in the corpus.</p>`;
+  } else {
+    const can = S.state && S.state.actor.role === "council-member";
+    adopt.innerHTML = `<h3 class="sub3" style="margin-top:0">Record the adoption</h3>
+      <p class="intro">Loading files is not adoption. When a body with authority
+        adopts what is loaded, record it here — every screen then stops calling
+        the framework provisional.</p>
+      ${can ? `
+        <div class="row" style="margin-top:10px">
+          <input id="fwDate" type="date" value="${new Date().toISOString().slice(0, 10)}">
+          <input id="fwNote" type="text" placeholder="Minute reference (optional)"
+                 style="flex:1;min-width:200px">
+          <button class="btn" id="fwAdopt" type="button">Record adoption</button>
+        </div>
+        <p class="small muted" style="margin-top:8px">Audited, and attributed to
+          you by name and title.</p>`
+        : `<div class="locked" style="margin-top:10px">
+            <b>This is the Council's to record.</b> You are acting as
+            ${esc((S.state && S.state.actor.role) || "operator")}. Switch capacity
+            in the header if you hold a Council seat.</div>`}`;
+  }
+  root.appendChild(adopt);
+
+  // What depends on it — the argument for the gate, made concrete.
+  const deps = el("div", "panel");
+  deps.innerHTML = `<h3 class="sub3" style="margin-top:0">What reads from it</h3>
+    <table><tbody>${f.dependents.map((d) => `
+      <tr><td style="width:130px"><b>${esc(d.screen)}</b></td>
+          <td>${esc(d.needs)}</td></tr>`).join("")}</tbody></table>`;
+  root.appendChild(deps);
+
+  $("#view").innerHTML = ""; $("#view").appendChild(root);
+
+  const btn = $("#fwAdopt");
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true;
+    const r = await api("/api/framework/adopt", {
+      method: "POST",
+      body: JSON.stringify({ adopted_on: $("#fwDate").value,
+                             note: $("#fwNote").value }),
+    });
+    btn.disabled = false;
+    if (r.ok) { toast("Adoption recorded."); await refreshFramework(); go("framework"); }
+    else toast(r.error || "Could not record the adoption.");
+  };
+
+  reason([
+    { title: "Why this comes first",
+      body: "Every parameter, gate, category and citation in this application is read out of the adopted framework. It is not a settings screen — it is the source the rest of the software reads.",
+      cite: "SCDES AI Governance Framework §1 (Purpose and Authority)" },
+    { title: "Loaded is not adopted",
+      body: "The application can read a draft so it can be reviewed. It marks it provisional until a body with authority adopts it, because a document in a folder carries no authority on its own.",
+      cite: "Appendix N — Framework and Appendix Amendments" },
+  ]);
+};
+
+/** A locked screen explains the gate rather than showing an empty table. */
+function frameworkGatePanel(view) {
+  const f = S.framework || {};
+  const root = el("div", "panel");
+  root.innerHTML = `
+    <h3 class="sub3" style="margin-top:0">${esc(META[view] ? META[view][0] : view)}
+      needs the framework first</h3>
+    <p class="intro">${esc((f.dependents || []).find((d) =>
+        d.screen.toLowerCase() === (META[view] ? META[view][0].toLowerCase() : ""))
+        ?.needs || "This screen is read out of the adopted framework.")}</p>
+    <p class="intro">None of that exists yet, so this screen would be showing
+      structure your agency has not agreed to. That is worse than showing
+      nothing.</p>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="gateGo" type="button">Set up the framework</button>
+      <button class="btn ghost" id="gateWhy" type="button">Watch the 60-second intro</button>
+    </div>`;
+  return root;
+}
+
 /** Abbreviation of the agency whose corpus is actually on disk. */
 function loadedAgencyName() {
   const reg = window.LNCH_DATA;
@@ -180,6 +517,21 @@ function go(view) {
     b.classList.toggle("active", b.dataset.view === view));
   const [t, s] = META[view] || ["", ""];
   $("#viewTitle").textContent = t; $("#viewSub").textContent = s;
+
+  // The framework gate comes before the corpus gate: without a framework there
+  // is no structure to show, whichever agency is selected.
+  const testerSession = !!(S.state && S.state.tester);
+  if (!testerSession && !frameworkReady() && !FRAMEWORK_EXEMPT.has(view)) {
+    $("#spine").hidden = true;
+    $("#view").innerHTML = "";
+    $("#view").appendChild(frameworkGatePanel(view));
+    $("#gateGo").onclick = () => go("framework");
+    $("#gateWhy").onclick = () => window.replayWelcome && window.replayWelcome();
+    reason([{ title: "Why this is closed",
+      body: "You cannot have a process without a framework. The gates, categories and thresholds this screen would show are all read out of the framework — there is nothing to read yet.",
+      cite: "Framework §1 (Purpose and Authority)" }]);
+    return;
+  }
 
   if (!agencyHasCorpus()) {
     $("#spine").hidden = true;            // the project spine is corpus data too
@@ -260,6 +612,11 @@ function renderAnswer(r) {
 /* ----------------------------------------------------------------- views */
 
 const VIEWS = {};
+
+// Registered here rather than defined inline, because the gate in go() refers to
+// it and it must exist before the first navigation.
+VIEWS.framework = VIEW_FRAMEWORK;
+VIEWS.home = VIEW_HOME;
 
 VIEWS.vision = async () => {
   const v = await api("/api/vision");
@@ -890,7 +1247,9 @@ VIEWS.audit = async () => {
   log.innerHTML = d.entries.map((e) =>
     `<div class="entry"><time>${esc(e.at.slice(0, 16))}</time>
      <span class="k ${e.outcome === "denied" ? "deny" : "allow"}">${esc(e.outcome)}</span>
-     <p><b>${esc(e.actor)}</b> ${esc(e.action)} → ${esc(e.target)}
+     <p><b>${esc((e.detail && e.detail.actor_name) || e.actor)}</b>${
+       e.detail && e.detail.actor_title ? `, ${esc(e.detail.actor_title)}` : ""
+     } ${esc(e.action)} → ${esc(e.target)}
      <br><span class="small muted">${esc((e.detail && e.detail.reason) || "")}</span>
      <br><span class="mono">#${e.seq} ${esc((e.hash || "").slice(0, 12))}</span></p></div>`).join("");
   root.appendChild(log);
@@ -968,13 +1327,14 @@ $("#userPick").addEventListener("change", async (e) => {
   S.user = e.target.value; await refreshState(); go(S.view);
 });
 
-// Two ways in: the rail button, and the #agency URL so the picker can be linked
-// to or bookmarked.
+/* The agency is chosen once, during onboarding, and is not something to flick
+   between mid-session — so the rail no longer carries a switcher. The picker is
+   still reachable at #agency for setting up a different agency deliberately,
+   and by the "Choose another agency" button on the no-corpus screen. */
 const showLauncher = () => {
   if (window.openLauncher) window.openLauncher();
   else location.reload();          // launcher.js failed to load — force a fetch
 };
-$("#railLaunch").onclick = showLauncher;
 $("#tourChip").onclick = () => window.startTour && window.startTour(true);
 window.addEventListener("hashchange", () => {
   if (location.hash === "#agency") showLauncher();
@@ -984,14 +1344,28 @@ window.toast = toast;   // the launcher reports theme changes through the same t
 /* The sign-in step hands the chosen identity back here. Everything downstream —
    which rooms are writable, whose name lands in the audit entry — follows from
    this one value, so it is set in exactly one place. */
-window.signInAs = async (id) => {
+window.signInAs = async (id, name, title) => {
   if (!id) return;
   S.user = id;
+  S.actorName = name || "";
+  S.actorTitle = title || "";
   window.SCDES_USER = id;
   await refreshState();
-  go(S.view || "vision");
-  const who = (S.state && S.state.actor) || {};
-  toast(`Signed in as ${who.name || id}${who.role ? " · " + who.role : ""}`);
+  await refreshFramework();
+
+  /* First thing after signing in is the 60-second welcome, then the Framework
+     screen — not the Vision screen. The order is the message: nothing downstream
+     means anything until the framework is in. */
+  const land = () => {
+    go("home");
+    const who = (S.state && S.state.actor) || {};
+    toast(`Signed in as ${who.name || name || id}` +
+          (who.title ? ` · ${who.title}` : ""));
+  };
+
+  if (window.startWelcome && window.welcomeSeen && !window.welcomeSeen())
+    window.startWelcome(land);
+  else land();
 };
 
 (async () => {
@@ -1007,7 +1381,9 @@ window.signInAs = async (id) => {
   // is a no-op when initLauncher already wired it.
   if (window.initColorMode) window.initColorMode();
   await refreshState();
-  go("vision");
+  await refreshFramework();
+  // Land on the framework unless one is adopted — the gate decides the door.
+  go("home");
 
   // Offer the tour once, and only after the launcher has been dismissed —
   // spotlighting the header while the map covers it would explain nothing.

@@ -482,6 +482,10 @@ body.tour-open { overflow: hidden; }
 }
 
 /* The spotlit control is lifted above the mask so it reads at full strength. */
+/* Lifted above .tour (200) so the mask's dark shadow does not cover it, but
+   below .tour-card (202) so the card is never hidden behind it. All three sit in
+   the root stacking order — which is why the card is a sibling of #tour in the
+   markup rather than a child. */
 .tour-lit { position: relative; z-index: 201; }
 
 .tour-card {
@@ -502,3 +506,144 @@ body.tour-open { overflow: hidden; }
 .tour-actions .btn { padding: 6px 14px; font-size: 12px; }
 
 .tour-chip { cursor: pointer; }
+
+
+/* ------------------------------------------------------- framework + gate */
+
+/* The framework tag on the rail carries the state at a glance: needs setting up,
+   loaded but provisional, or adopted and authoritative. */
+.rail-item .tag.ok   { border-color: var(--ok);    color: var(--ok); }
+.rail-item .tag.warn { border-color: var(--warn);  color: var(--warn); }
+.rail-item .tag.bad  { border-color: var(--alert); color: var(--alert); }
+.rail-item.active .tag.ok,
+.rail-item.active .tag.warn,
+.rail-item.active .tag.bad { border-color: rgba(255,255,255,.5); color: #fff; }
+
+.rail-item.rail-framework { font-weight: 600; }
+
+/* Locked sections stay visible but are plainly not available. Hiding them would
+   leave someone wondering where the app went; greying them shows what is waiting
+   on the framework. */
+.rail-item.rail-locked { opacity: .42; cursor: not-allowed; }
+.rail-item.rail-locked:hover { background: none; }
+
+.fw-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+
+.fw-routes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+.fw-route {
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  background: var(--surface-2);
+}
+.fw-route b { display: block; margin-bottom: 5px; }
+@media (max-width: 900px) { .fw-routes { grid-template-columns: 1fr; } }
+
+/* ------------------------------------------------------------- welcome */
+
+.welcome {
+  position: fixed; inset: 0; z-index: 160;
+  display: grid; place-items: center; padding: 24px;
+  background: radial-gradient(ellipse at 50% 10%, #16323f 0%, #0a1a22 60%, #050e13 100%);
+}
+body.welcome-open { overflow: hidden; }
+
+.wel-card {
+  width: min(880px, 100%);
+  background: var(--surface); color: var(--ink);
+  border-radius: 16px; overflow: hidden;
+  box-shadow: 0 26px 70px rgba(0,0,0,.45);
+  display: grid; grid-template-columns: 300px 1fr;
+}
+@media (max-width: 780px) { .wel-card { grid-template-columns: 1fr; } }
+
+.wel-art {
+  background: var(--chrome); display: grid; place-items: center; padding: 22px;
+}
+.wel-art svg { width: 100%; height: auto; }
+/* One vocabulary for all six diagrams, so they read as a set. */
+.wa-paper  { fill: #ffffff; stroke: rgba(255,255,255,.5); stroke-width: 1; }
+.wa-screen { fill: rgba(255,255,255,.14); stroke: rgba(255,255,255,.4); }
+.wa-empty  { fill: none; stroke: rgba(255,255,255,.3); stroke-dasharray: 4 3; }
+.wa-locked { fill: rgba(255,255,255,.07); stroke: rgba(255,255,255,.18); }
+.wa-void   { fill: none; stroke: var(--alert-on-dark); stroke-width: 2; }
+.wa-strike { stroke: var(--alert-on-dark); stroke-width: 2; }
+.wa-line     { stroke: rgba(10,30,40,.5); stroke-width: 2; }
+.wa-line-lit { stroke: var(--highlight); stroke-width: 2; }
+.wa-arrow  { stroke: var(--highlight); stroke-width: 2; fill: none;
+             marker-end: none; }
+.wa-core   { fill: var(--accent); stroke: var(--highlight); stroke-width: 1.5; }
+.wa-core-t { fill: #fff; font: 700 9px var(--body); text-anchor: middle;
+             letter-spacing: .5px; }
+.wa-spoke  { stroke: rgba(255,255,255,.34); stroke-width: 1.5; }
+.wa-spoke-t{ fill: rgba(255,255,255,.72); font: 9.5px var(--body); }
+.wa-q      { fill: rgba(255,255,255,.4); font: 700 20px var(--serif); text-anchor: middle; }
+.wa-tick   { fill: var(--ok); font: 700 34px var(--body); text-anchor: middle; }
+.wa-lock-t { fill: rgba(255,255,255,.42); font: 9.5px var(--body); text-anchor: middle; }
+.wa-opt    { fill: rgba(255,255,255,.85); font: 10.5px var(--body); text-anchor: middle; }
+.wa-sig    { fill: var(--highlight); font: 700 26px var(--serif); text-anchor: middle; }
+
+.wel-body { padding: 30px 32px 8px; }
+.wel-kicker {
+  margin: 0 0 6px; font-size: 10.5px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--accent-text); font-weight: 700;
+}
+.wel-card h2 { margin: 0 0 10px; font-size: 24px; line-height: 1.2; }
+.wel-text { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--muted); }
+
+.wel-foot {
+  grid-column: 2; padding: 14px 32px 22px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+@media (max-width: 780px) { .wel-foot { grid-column: 1; } }
+.wel-dots { display: flex; gap: 6px; }
+.wel-dots i {
+  width: 22px; height: 3px; border-radius: 2px; background: var(--line);
+  display: block;
+}
+.wel-dots i.on { background: var(--accent); }
+.wel-bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.wel-bar span { display: block; height: 100%; background: var(--accent);
+                transition: width .5s linear; }
+.wel-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.wel-actions .btn small { opacity: .75; font-weight: 400; }
+
+
+/* --------------------------------------------------- the seven-step lifecycle */
+
+.lifecycle { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.lc-step {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 11px 13px; border-radius: 9px;
+  border-left: 3px solid var(--line);
+}
+.lc-step + .lc-step { margin-top: 2px; }
+.lc-n {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  background: var(--surface-2); color: var(--muted);
+  border: 1px solid var(--line);
+}
+.lc-name { font-weight: 600; font-size: 13.5px; margin-bottom: 2px; }
+.lc-what { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+/* The step they are actually on. The rest are context. */
+.lc-step.lc-now {
+  border-left-color: var(--accent); background: var(--surface-2);
+}
+.lc-step.lc-now .lc-n {
+  background: var(--action); color: var(--on-action); border-color: var(--action);
+}
+
+/* A subscription heading, so "greyed out" reads as a product boundary rather
+   than a fault. */
+.rail-badge {
+  font-size: 8.5px; letter-spacing: .4px; padding: 1px 5px; border-radius: 4px;
+  border: 1px solid var(--line); color: var(--muted); font-weight: 600;
+  text-transform: none; letter-spacing: .3px;
+}
+
+
+/* A tester session has its gates open. It must be impossible to mistake for a
+   real one — hence a loud badge rather than a subtle one. */
+.tester-chip {
+  background: var(--alert-fill); color: var(--alert-on-dark);
+  border-color: var(--alert); letter-spacing: .6px; cursor: help;
+}
