@@ -69,7 +69,7 @@ DELTA_BRAVO = Quote(
     disclosure_tier=2,
     goals={"permit_backlog_reduction": 5, "inspection_targeting": 3,
            "internal_efficiency": 4, "public_response_time": 3},
-    notes=("Quoted as an annual licence across three divisions. The vendor will "
+    notes=("Quoted as an annual license across three divisions. The vendor will "
            "re-type the build portion as one-time on request — which is the "
            "scenario worth running."),
 )

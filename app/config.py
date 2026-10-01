@@ -150,7 +150,7 @@ DEFAULT_PROCUREMENT = {
     },
     "change_management": {
         1: "Notify OT; registry update within 10 business days",
-        2: "OT review and CTO acknowledgement before substitution",
+        2: "OT review and CTO acknowledgment before substitution",
         3: "Council concurrence (Tier B) before substitution",
         4: "Convened Council decision (Tier C) before substitution",
     },
@@ -305,7 +305,7 @@ EXPLANATIONS: dict[str, tuple[str, str]] = {
         APPENDIX_B_CITATION,
     ),
     "budget.pools.recurring_per_year": (
-        "The annual recurring funding pool. Licence and subscription costs are "
+        "The annual recurring funding pool. License and subscription costs are "
         "scored against this pool; a quote that exceeds it is flagged over "
         "budget but is still fully scored.",
         "SCDES AI Operations Manual §9–10 (Procurement and Budget)",

@@ -22,9 +22,53 @@ from app import onboarding
 
 # ------------------------------------------------------------------- portals
 
-def test_two_portals_are_offered() -> None:
+def test_three_portals_are_offered() -> None:
     keys = {p["key"] for p in onboarding.portals()}
-    assert keys == {"government", "business"}
+    assert keys == {"government", "other", "business"}
+
+
+# ------------------------------------------------ a public body on another address
+
+@pytest.mark.parametrize("email", [
+    "mju@cityofmonticello.net",       # the report that opened this
+    "clerk@scalc.net",
+    "admin@townofexample.com",
+    "gm@harriscountymud12.com",
+])
+def test_a_public_body_on_any_address_can_come_in_as_other(email: str) -> None:
+    verdict = onboarding.check_email(email, portal="other")
+    assert verdict.ok, verdict.reason
+    assert verdict.evidence == "other"
+
+
+def test_other_takes_a_personal_mailbox_and_says_so() -> None:
+    """The same rule as the unlisted registration it leads to: a small
+    district may run on a personal mailbox. Recorded as such."""
+    verdict = onboarding.check_email("clerk.smalltown@gmail.com", portal="other")
+    assert verdict.ok and verdict.evidence == "other-personal"
+
+
+def test_the_government_option_points_a_personal_mailbox_to_other() -> None:
+    verdict = onboarding.check_email("someone@gmail.com")
+    assert not verdict.ok and "Other public body" in verdict.reason
+
+
+def test_the_government_refusal_points_to_other() -> None:
+    """It used to dead-end a city on .net with "needs a .gov address"."""
+    verdict = onboarding.check_email("mju@cityofmonticello.net")
+    assert not verdict.ok
+    assert "Other public body" in verdict.reason
+
+
+def test_an_other_registration_is_recorded_as_other(tmp_path, monkeypatch) -> None:
+    store = tmp_path / "registrations.jsonl"
+    monkeypatch.setattr(onboarding, "STORE", store)
+    out = onboarding.register("mju@cityofmonticello.net", portal="other",
+                              organisation="City of Monticello")
+    assert out["ok"]
+    entry = json.loads(store.read_text(encoding="utf-8").strip())
+    assert entry["portal"] == "other" and entry["evidence"] == "other"
+    assert entry["verified"] is False
 
 
 def test_the_business_portal_is_announced_but_closed() -> None:
@@ -72,7 +116,8 @@ def test_public_sector_and_non_profit_addresses_pass(email: str) -> None:
 def test_commercial_addresses_are_refused(email: str) -> None:
     verdict = onboarding.check_email(email)
     assert not verdict.ok
-    assert "business" in verdict.reason.lower()
+    # Pointed somewhere, never a dead end.
+    assert "other public body" in verdict.reason.lower()
 
 
 @pytest.mark.parametrize("email", [
@@ -80,7 +125,7 @@ def test_commercial_addresses_are_refused(email: str) -> None:
     "someone@yahoo.com", "someone@icloud.com",
 ])
 def test_personal_mailboxes_get_a_useful_refusal(email: str) -> None:
-    """"Use your organisation's address" beats "invalid domain"."""
+    """"Use your organization's address" beats "invalid domain"."""
     verdict = onboarding.check_email(email)
     assert not verdict.ok
     assert "personal mailbox" in verdict.reason.lower()

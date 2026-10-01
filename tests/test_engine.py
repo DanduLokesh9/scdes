@@ -10,7 +10,7 @@ import copy
 import pytest
 
 from app import agent, budget as budget_mod, config as config_mod
-from app import registry as registry_mod, retrieval, scoring, vision, workflow
+from app import registry as registry_mod, retrieval, scoring, vision
 from app.authz import CHAT_ACTOR, Actor, Role, Target, guard
 from app.provider import LocalProvider
 
@@ -212,7 +212,7 @@ def test_query_is_cited(local):
 
 @pytest.mark.parametrize("message", [
     "What is the best pizza topping?",
-    "How do I renew my driver licence?",
+    "How do I renew my driver license?",
     "What is the capital of France?",
 ])
 def test_out_of_scope_is_refused(message, local):
@@ -251,53 +251,26 @@ def test_intake_offers_alternatives(local):
     assert len(result.draft_project["candidates"]) > 1
 
 
-# ---------------------------------------------------------- workflow (M4)
-
-def test_gate_map_is_derived_from_appendix_h():
-    gates = workflow.gate_map()
-    assert set(gates) == {0, 1, 2, 3, 4, 5}
-    assert all(spec.requirements for spec in gates.values())
-    # Gate 1 is readiness — Appendix D must surface there.
-    assert "D" in gates[1].appendices
-    # The evaluation and model-card instruments belong to the test/deploy gates.
-    assert "J" in gates[2].appendices or "K" in gates[2].appendices
-
-
-def test_render_step_prefills_from_the_project():
-    step = workflow.render_step("AI-001", gate=0)
-    assert step.form_appendix == "G"
-    assert step.form
-    assert step.prefilled
-    for field in step.form:
-        assert field["cell"], "every rendered field needs a writeback address"
-
-
-def test_high_risk_gate_routes_to_council_rather_than_advancing(tmp_path):
-    project = registry_mod.load("AI-001")
-    liz = Actor("liz.operator", "Liz", Role.OPERATOR)
-    step = workflow.render_step("AI-001", gate=project.gate)
-    values = {f["key"]: (f["value"] or "x") for f in step.form[:3]}
-    before_gate = project.gate
-
-    result = workflow.save_step("AI-001", step.form_appendix, values, liz,
-                                advance_to=before_gate + 1)
-    assert result["written"]
-    if project.risk().council_required:
-        assert result["stage_advanced"] is False
-        assert "routed_to_council" in result
-    assert registry_mod.load("AI-001").gate == before_gate
-
-
-def test_template_is_never_modified():
-    import hashlib
-    template = workflow.appendix_files()["G"]
-    digest = hashlib.sha256(template.read_bytes()).hexdigest()
-    project = registry_mod.load("AI-001")
-    liz = Actor("liz.operator", "Liz", Role.OPERATOR)
-    step = workflow.render_step("AI-001", gate=0)
-    workflow.save_step("AI-001", "G",
-                       {step.form[0]["key"]: "integrity probe"}, liz)
-    assert hashlib.sha256(template.read_bytes()).hexdigest() == digest
+# --------------------------------------------- the Workflow Helper, retired
+#
+# Four tests stood here, over a module that carried one Registry entry
+# through six numbered gates and wrote the form into a copy of Appendix H.
+# The module was retired with the arrival of the lifecycle spine: seven
+# gates, fixed names, never numbered, and no dependence on any one
+# organisation's workbooks.
+#
+# One of those tests was checking something worth keeping, and it now has a
+# home on the surface that inherited the behaviour rather than being lost
+# with the module. `test_template_is_never_modified` asserted that the
+# adopted template was copied before it was filled, so the master was never
+# touched. The equivalent guarantee on the spine is that a record is never
+# deleted and a passage recorded after the fact keeps both dates — see
+# `tests/test_projects.py`.
+#
+# The other three were about the six-gate map, its Appendix H derivation and
+# its council routing. All three describe a scheme this product no longer
+# has, and re-pointing them at the seven gates would be writing new tests
+# rather than keeping old ones.
 
 
 # ------------------------------------------------------------ vision (M5)

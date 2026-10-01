@@ -2,7 +2,7 @@
 
 Input   the state list in app/states.py
 Output  app/web/assets/flags/XX.png   — one flag per state, plus DC
-        app/web/assets/flags/index.json — source, licence and author for each
+        app/web/assets/flags/index.json — source, license and author for each
 
 Why PNG rather than the original SVG: several state flags carry a full state
 seal, and those SVGs run to hundreds of kilobytes each — Washington's is 265 KB,
@@ -12,10 +12,10 @@ twentieth of the weight. Commons renders these itself, so the thumbnail is the
 same artwork, not a re-drawing.
 
 US state flags are public domain as government insignia, but that is asserted
-per-file rather than assumed: this records the licence Commons reports for each
+per-file rather than assumed: this records the license Commons reports for each
 one and refuses to save anything that is not public domain or CC0.
 
-This runs once. Afterwards the application needs no network, which is the whole
+This runs once. Afterward the application needs no network, which is the whole
 point of the build.
 """
 
@@ -156,7 +156,7 @@ def flag_for(code: str, info: dict) -> dict:
     meta = info.get("extmetadata") or {}
     licence = strip_markup(meta.get("LicenseShortName", {}).get("value", ""))
     if not any(word in licence.lower() for word in ACCEPTED):
-        result["error"] = f"licence not clearly public domain: {licence!r}"
+        result["error"] = f"license not clearly public domain: {licence!r}"
         return result
 
     # Already on disk: don't ask Commons for it again. Reruns after a partial
@@ -206,7 +206,7 @@ def main(argv: list[str]) -> int:
     manifest = {
         "note": ("US state flags, rendered by Wikimedia Commons and bundled so "
                  "the application needs no network. Public domain as government "
-                 "insignia; the licence Commons reports is recorded per file."),
+                 "insignia; the license Commons reports is recorded per file."),
         "width": WIDTH,
         "flags": {r["code"]: {"licence": r["licence"], "source": r["descriptionurl"],
                               "artist": r["artist"]} for r in ok},

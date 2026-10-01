@@ -1,7 +1,7 @@
 """Vision → funded roadmap, and the line-of-sight view over it.
 
 The interesting question is not "can we afford this project" but "what has to
-exist first". Foundations are modelled as a **capability dependency graph**:
+exist first". Foundations are modeled as a **capability dependency graph**:
 projects declare the capabilities they need, foundations declare the ones they
 provide, and the app computes the unmet set, orders it, and costs it against the
 budget pools.
@@ -27,7 +27,7 @@ DEFAULT_VISION = {
     "citation": ("SCDES AI Governance Framework §4 (Measurable Value); "
                  "SCDES AI Operations Manual §20 (Portfolio Management)"),
     "statement": (
-        "Every programme uses AI it can trust — to cut permit backlog, target "
+        "Every program uses AI it can trust — to cut permit backlog, target "
         "inspections by risk, and answer the public faster — without a person "
         "ever losing the final call."
     ),
@@ -100,7 +100,7 @@ DEFAULT_CAPABILITIES = {
             "requires": ["data_governance"],
             "one_time": 75_000, "recurring": 0,
             "status": "not_started",
-            "why": "Establishes which programmes can support AI at all, so the "
+            "why": "Establishes which programs can support AI at all, so the "
                    "roadmap is sequenced on evidence rather than appetite.",
             "appendix": "Appendix D — Data Readiness Assessment",
         },
@@ -357,8 +357,10 @@ def overview() -> dict[str, Any]:
         gaps.append(f"{len(blocked)} roadmap projects are blocked on foundations "
                     f"that are not funded or not started.")
     if summary["bands"].get("High", 0) > summary["count"] / 3:
+        from app import decider
         gaps.append(f"{summary['bands']['High']} of {summary['count']} pipeline "
-                    f"projects classify High risk, which concentrates Council load.")
+                    f"projects classify High risk, which concentrates the load "
+                    f"on {decider.body()}.")
 
     return {
         "vision": v.get("statement", ""),
@@ -381,6 +383,14 @@ def _pillar_for(project: registry_mod.Project) -> str:
     return "Protect"
 
 
+def _oversight_by(risk: scoring.RiskResult) -> str:
+    """Who watches this one — the agency's own decider, or its bureau."""
+    if not risk.council_required:
+        return "bureau oversight"
+    from app import decider
+    return f"oversight by {decider.body()}"
+
+
 def _contribution(project: registry_mod.Project, risk: scoring.RiskResult) -> str:
     stage_text = {
         "concept": "not yet contributing — at concept",
@@ -392,4 +402,4 @@ def _contribution(project: registry_mod.Project, risk: scoring.RiskResult) -> st
     return (f"Category {project.category} · {stage_text}. "
             f"Each cleared gate moves it from intent to evidenced capability; "
             f"at {risk.band} risk it carries "
-            f"{'Council oversight' if risk.council_required else 'bureau oversight'}.")
+            f"{_oversight_by(risk)}.")

@@ -1,13 +1,20 @@
-"""The Council — the gated room where the governance itself changes.
+"""The decision record — the gated room where the governance itself changes.
 
 Append-only. Framework and appendix amendments run propose → diff → approve →
 commit; gate decisions and award decisions are logged against their tier; the
 minutes and recordings live here too.
 
-Decision tiers, per the Framework:
-  A  CTO unilateral, logged
-  B  72-hour concurrence
-  C  convened session, consensus
+**Who the decider is comes from `app/decider.py`, not from this module.** The
+name is historical: this file was written for SCDES, which has a council, and it
+used to state as fact that decisions are graded A/B/C with a 72-hour concurrence
+and a convened session. That is SCDES's answer to a framework question, and an
+agency whose framework named one person instead has no body to concur and no
+session to convene. So the tiers, the quorum and the wording are all read from
+the answer that agency actually gave; only the storage and the append-only
+discipline live here.
+
+The canonical keys stay A/B/C whichever shape is chosen, so a decision recorded
+under one arrangement is still readable under another.
 """
 
 from __future__ import annotations
@@ -32,11 +39,17 @@ MEMBERS_FILE = COUNCIL_DIR / "members.yaml"
 
 TIER_A, TIER_B, TIER_C = "A", "B", "C"
 
-TIER_RULES = {
-    TIER_A: "CTO unilateral; logged to the decision record.",
-    TIER_B: "72-hour concurrence; silence is not assent.",
-    TIER_C: "Convened session; consensus of the Council.",
-}
+
+def tier_rules() -> dict[str, str]:
+    """What each decision level requires, in this agency's arrangement.
+
+    A single decider has one level, because the other two describe things that
+    only a group can do. Offering all three to someone who chose one person
+    would be offering them procedures they cannot carry out.
+    """
+    from app import decider
+    return {k.upper(): v for k, v in decider.levels().items()}
+
 
 
 def _now() -> datetime:
@@ -85,10 +98,26 @@ def members() -> dict[str, Any]:
 
 
 def quorum() -> int:
-    return int(members().get("quorum", 3))
+    """Members needed for a convened session.
+
+    A single decider is always their own quorum — asking one person to muster
+    three is how a framework becomes unusable.
+    """
+    from app import decider
+    if not decider.is_group():
+        return 1
+    return int(members().get("quorum", decider.quorum()))
 
 
 def is_member(actor: Actor) -> bool:
+    """Whether this actor holds the deciding authority.
+
+    Role.COUNCIL is the canonical name for that capacity whichever shape the
+    agency chose; what the interface *calls* it comes from decider.py.
+    """
+    from app import decider
+    if not decider.is_group():
+        return actor.role is Role.COUNCIL
     ids = {m["id"] for m in members().get("members", [])}
     return actor.role is Role.COUNCIL and (actor.user_id in ids or not ids)
 
@@ -110,7 +139,7 @@ def log_decision(*, tier: str, summary: str, actor: Actor,
         "at": _stamp(), "tier": tier, "kind": kind, "summary": summary,
         "by": actor.user_id, "by_name": actor.name,
         "refs": refs or [], "detail": detail or {},
-        "tier_rule": TIER_RULES.get(tier, ""),
+        "tier_rule": tier_rules().get(tier, ""),
         "status": "recorded",
     }
     _append(DECISION_LOG, entry)
@@ -123,8 +152,14 @@ def decisions(limit: int | None = None) -> list[dict[str, Any]]:
 
 
 def tier_for_band(band: str) -> str:
-    """Which decision tier a gate decision needs, given the project's risk."""
-    return {"Low": TIER_A, "Moderate": TIER_B, "High": TIER_C}.get(band, TIER_B)
+    """Which decision tier a gate decision needs, given the project's risk.
+
+    Under a single decider every band lands on A: risk cannot summon a body the
+    agency did not create, so a high-risk system is still that person's call —
+    logged, and reported out.
+    """
+    from app import decider
+    return decider.level_for_band(band).upper()
 
 
 def request_gate_decision(*, project, gate: int, actor: Actor,
@@ -139,7 +174,7 @@ def request_gate_decision(*, project, gate: int, actor: Actor,
         "requested_by": actor.user_id,
         "registry_id": project.registry_id, "gate": gate,
         "risk_band": risk.band, "composite": risk.total,
-        "tier_rule": TIER_RULES[tier],
+        "tier_rule": tier_rules().get(tier, ""),
         "status": "awaiting_decision",
         "due_by": (_now() + timedelta(hours=72)).isoformat(timespec="seconds")
         if tier == TIER_B else None,

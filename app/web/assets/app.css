@@ -1,4 +1,4 @@
-/* SCDES AI Governance — shell.
+﻿/* SCDES AI Governance — shell.
    Palette is untouched: every colour resolves through tokens.css.
 
    Layout idea: "the record and the reason". The centre column is what the
@@ -7,7 +7,12 @@
 
 * { box-sizing: border-box; }
 
-html, body { height: 100%; }
+/* The page itself never scrolls. The sidebar and the record each scroll on
+   their own, and every full-screen layer (sign-in, first visit, welcome, the
+   command bar) is fixed with its own scrolling — so a scrollbar for the
+   whole window only ever appeared when something was a few pixels too big,
+   and moved nothing anybody needed. */
+html, body { height: 100%; overflow: hidden; }
 
 body {
   margin: 0;
@@ -46,6 +51,10 @@ button { cursor: pointer; border: 0; background: none; }
   padding: 0 18px; height: 56px; flex: none;
   background: var(--chrome); color: var(--on-chrome);
   border-bottom: 1px solid var(--sidebar-line);
+  /* On a narrow window the bar is wider than the screen. With the page no
+     longer scrolling, the bar scrolls sideways on its own, so Sign out and
+     everything beside it stay reachable. */
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
 }
 .tb-brand { display: flex; align-items: center; gap: 11px; flex: none; }
 /* The mark is banded with every colour the agency has — two or twenty — so the
@@ -137,23 +146,65 @@ button { cursor: pointer; border: 0; background: none; }
 .gate.now .pip { background: var(--warn); border-color: var(--warn);
   box-shadow: 0 0 0 3px var(--warn-fill); }
 .gate.ahead { opacity: .5; }
+/* The gate being read, as distinct from the gate the project has reached.
+
+   The pips carry progress — green for cleared, amber for where the project
+   actually is — and those colours are the same whatever you click, because
+   they describe the record rather than the screen. That is correct, and it is
+   also why a 1.5px inset ring did not register as "selected": next to a filled
+   amber pip it read as nothing at all.
+
+   So the selected gate is now unmistakable — brightened, bolder, and outlined
+   in the brand highlight — while the pips underneath keep saying what they
+   said. Both facts, neither hiding the other. */
+.gate.viewing {
+  opacity: 1;
+  font-weight: 600;
+  background: rgba(255, 255, 255, .16);
+  outline: 2px solid var(--highlight);
+  outline-offset: -1px;
+}
+/* The pip too, or the eye skips it — that is the part being read as the state. */
+.gate.viewing .pip {
+  box-shadow: 0 0 0 3px var(--highlight);
+}
+.gate.viewing.now .pip { box-shadow: 0 0 0 3px var(--highlight); }
 .gate-link { width: 20px; height: 1px; background: var(--sidebar-line); flex: none; }
 
 /* ----------------------------------------------------------------- shell */
 
 .shell {
   flex: 1; min-height: 0;
-  display: grid; grid-template-columns: 194px minmax(0,1fr) 316px;
+  /* Two columns. The third held the reason rail, which is now reached from the
+     help panel instead of standing open on every screen. */
+  display: grid; grid-template-columns: 194px minmax(0,1fr);
 }
-.shell.no-reason { grid-template-columns: 194px minmax(0,1fr) 44px; }
 
 .rail {
   border-right: 1px solid var(--line); background: var(--surface);
   padding: 14px 10px; overflow-y: auto;
+  /* `overflow-y: auto` alone computes overflow-x to auto as well, so anything a
+     pixel too wide gives the rail its own horizontal scrollbar and lets the
+     icons slide out of view. Nothing in a sidebar should ever scroll sideways. */
+  overflow-x: hidden;
 }
 .rail-eyebrow {
   font-size: 9.5px; letter-spacing: 1.3px; text-transform: uppercase;
   color: var(--muted); margin: 16px 8px 6px; font-weight: 700;
+  /* Flex, so the badge sits beside the label and wraps under it in a narrow
+     rail rather than pushing the line wider than the column. */
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  /* Aligned with the rail items' text, which is 10px of button padding in from
+     the same edge. Two pixels out is the kind of thing that reads as wonky
+     without anyone being able to say why. */
+  margin-left: 10px;
+}
+/* A sentence, not another row. Nine greyed rooms with no explanation reads as
+   broken software; the same nine with a line saying what they are reads as a
+   price list. */
+.rail-note {
+  margin: 8px 10px 0; font-size: 10.5px; line-height: 1.5;
+  color: var(--muted); opacity: .85;
 }
 .rail-eyebrow:first-child { margin-top: 2px; }
 
@@ -165,6 +216,16 @@ button { cursor: pointer; border: 0; background: none; }
 .rail-item i { font-style: normal; color: var(--accent); width: 14px;
   text-align: center; font-size: 12px; }
 .rail-item:hover { background: var(--surface-2); }
+/* The deciding body is an answer the agency gives, not a room the app ships.
+   Until it is answered the rail carries the question, marked as outstanding —
+   hiding it would leave the question unasked, and showing it plain would look
+   like a room that exists. */
+.rail-item.rail-open-question { color: var(--muted); }
+.rail-item.rail-open-question::after {
+  content: "?"; margin-left: auto; font-size: 10px; font-weight: 700;
+  width: 15px; height: 15px; line-height: 15px; text-align: center;
+  border-radius: 50%; background: var(--warn); color: var(--surface);
+}
 /* Arrow keys move focus without selecting, so the focus ring is the only thing
    telling you where you are — it has to be unmissable, and distinguishable from
    the active item's dark fill. */
@@ -216,12 +277,46 @@ button { cursor: pointer; border: 0; background: none; }
 }
 .rail-item.active .tag { border-color: rgba(255,255,255,.3); color: var(--highlight); }
 
+/* The content uses the window. All of it.
+ *
+ * The client, twice, and the second time because I had not listened the
+ * first: "Why does the text underneath Download the draft document go fully
+ * left to right, but above the Save a version it stops halfway? Many fields
+ * are like this and it leaves a huge blank space to the right" — then, of
+ * the band still left down the right-hand side, "adjust the panel to area
+ * that is not usable".
+ *
+ * Both notes say the same thing: the empty space is waste, fill it. My first
+ * answer capped every paragraph at 860px, which made them consistent with
+ * each other and left 356px of nothing beside them. My second centred that
+ * nothing, which split it in two without removing any of it. Neither is what
+ * was asked for.
+ *
+ * So there is no measure. Cards fill the column, prose fills the cards, and
+ * the window is used. Line length is now governed by the window rather than
+ * by a number chosen here — which on a wide monitor makes for a long line,
+ * and is the trade the person who owns the product has asked for twice. */
+:root { --measure: none; }
+
 .record { overflow-y: auto; padding: 26px 30px 60px; }
-.rec-head { margin-bottom: 22px; }
+
+/* Nothing is held back from the edge. `--measure` is `none`, so these are
+   the full width of the record column; the declarations stay because the
+   variable is the one place to put a cap back if a cap is ever wanted. */
+.rec-head, #view { max-width: var(--measure); }
+#view.wide { max-width: none; }
 .crumb { font-size: 10.5px; letter-spacing: .8px; color: var(--muted);
   text-transform: uppercase; margin: 0 0 6px; }
 h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.2px; }
-.lede { color: var(--muted); font-size: 13.5px; margin: 0; max-width: 70ch; }
+/* The one-line summary under every page title ("What is out there, and what
+   you already have."). Given an accent bar so it reads as the point of the
+   page rather than a caption — chosen by the team, Sep 30 2026. The bar uses
+   --accent-text, which is the theme's accent re-tuned for dark mode, so it
+   stays visible on both backgrounds; the text is full-strength ink. */
+.lede { color: var(--ink); font-size: 15px; font-weight: 500; line-height: 1.45;
+  margin: 6px 0 0; padding: 4px 0 4px 12px;
+  border-left: 4px solid var(--accent-text); }
+.lede:empty { display: none; }
 
 /* ---------------------------------------------------------------- reason */
 
@@ -237,14 +332,18 @@ h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.2px; }
   background: var(--surface-2);
 }
 .reason-head button { color: var(--muted); font-size: 16px; line-height: 1; }
-.shell.no-reason .reason-head span, .shell.no-reason #reasonBody { display: none; }
-.shell.no-reason .reason-head button { transform: rotate(180deg); }
+/* Off the screen, still in the document.
+   `reason()` keeps filling it and the guide keeps reading it — see
+   explainScreen() in guide.js. A hidden container that everything already
+   writes to costs nothing; fourteen screens rewritten to stop writing to it
+   would cost a great deal. */
+.reason { display: none; }
 #reasonBody { padding: 16px; font-size: 12.5px; }
 .reason-empty { color: var(--muted); }
 .reason-block { padding-bottom: 16px; margin-bottom: 16px;
   border-bottom: 1px solid var(--line); }
 .reason-block:last-child { border-bottom: 0; }
-.reason-block h4 { margin: 0 0 6px; font-size: 12.5px; font-family: var(--body);
+.reason-block :is(h3, h4) { margin: 0 0 6px; font-size: 12.5px; font-family: var(--body);
   font-weight: 700; }
 .reason-block p { margin: 0 0 8px; color: var(--muted); }
 .reason-cite {
@@ -262,10 +361,12 @@ h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.2px; }
   border-radius: var(--r); padding: 18px 20px; margin-bottom: 16px;
 }
 .panel > :first-child { margin-top: 0; }
-h2.sec { font-size: 17px; margin: 26px 0 12px; display: flex; gap: 10px;
+.sec { font-size: 17px; margin: 26px 0 12px; display: flex; gap: 10px;
   align-items: center; flex-wrap: wrap; }
-h3.sub3 { font-size: 13.5px; margin: 18px 0 9px; }
-.intro { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; max-width: 74ch; }
+.sub3 { font-size: 13.5px; margin: 18px 0 9px; }
+/* No measure of its own: the column has one, and two different measures in
+   one card is the fault being fixed. */
+.intro { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
   gap: 12px; margin-bottom: 16px; }
@@ -307,6 +408,68 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .note { font-size: 11.5px; color: var(--muted); flex: 1; min-width: 200px; }
 
+/* The subscription page.
+ *
+ * No card fields exist here because none exist in the markup — the invoice
+ * route needs no instrument and the card route is a hand-off to a provider's
+ * own page. Every state below is named in words as well as coloured, on the
+ * same rule as the monitor: colour reinforces, the word carries. */
+.bl-covers { list-style: none; margin: 12px 0 0; padding: 0; }
+.bl-covers li {
+  padding: 8px 0; border-bottom: 1px solid var(--line);
+  font-size: 12.5px; line-height: 1.55;
+}
+.bl-covers li:last-child { border-bottom: 0; }
+.bl-covers b { display: inline-block; min-width: 132px; }
+.bl-covers span { color: var(--muted); }
+
+.bl-price { margin: 10px 0 6px; display: flex; align-items: baseline; gap: 9px; }
+.bl-price b { font-size: 30px; font-variant-numeric: tabular-nums; }
+.bl-price span { font-size: 12.5px; color: var(--muted); }
+
+.bl-route {
+  margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);
+}
+.bl-route:first-of-type { margin-top: 10px; padding-top: 0; border-top: 0; }
+.bl-route-h { margin: 0 0 6px; font-size: 13px; }
+.bl-route p { font-size: 12.5px; line-height: 1.6; margin: 0 0 8px; }
+
+/* A route that cannot work. Said plainly rather than shown as a dead
+   button — the pattern the mail fallback settled on. */
+.bl-off {
+  padding: 10px 12px; border-radius: 8px; background: var(--surface-2);
+  border-left: 3px solid var(--muted);
+}
+
+.bl-state { font-weight: 600; font-size: 11.5px; }
+.bl-state.paid, .bl-state.fulfilled { color: var(--ok); }
+.bl-state.pending, .bl-state.payment_review { color: var(--accent-text); }
+.bl-state.failed, .bl-state.disputed { color: var(--alert, #b3261e); }
+.bl-state.refunded, .bl-state.partially_refunded,
+.bl-state.expired { color: var(--muted); }
+
+/* The handover, at the moment the document leaves.
+ *
+ * The client: "I think this point is a good time to remind the user that we
+ * require a human in authority. So now the user needs to download the
+ * version and review it carefully."
+ *
+ * Set apart rather than written as two more paragraphs, because it is the
+ * framework's own first rule turned on itself: a decision that affects the
+ * public rests with a person, and the document's own adoption is the first
+ * place that has to be true. Bordered on the left in the accent, like every
+ * other statement in this application that carries authority. */
+.fb-handoff {
+  margin-top: 18px; padding: 15px 17px; border-radius: var(--r);
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+}
+.fb-handoff-h {
+  margin: 0 0 8px; font-size: 13.5px; font-weight: 700; color: var(--ink);
+}
+.fb-handoff p { font-size: 12.5px; line-height: 1.6; margin: 0 0 9px; }
+.fb-handoff .row { margin-top: 12px; }
+
 .locked { background: var(--surface-2); border: 1px dashed var(--line);
   border-radius: var(--r); padding: 20px; color: var(--muted); font-size: 12.5px; }
 .locked b { color: var(--ink); display: block; margin-bottom: 5px; font-size: 13.5px; }
@@ -314,9 +477,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* control fields */
 .field { padding: 15px 0; border-top: 1px solid var(--line); }
 .field:first-of-type { border-top: 0; padding-top: 0; }
-.field h4 { margin: 0 0 3px; font-size: 13px; font-family: var(--body); }
-.field .governs { font-size: 12px; color: var(--muted); margin: 0 0 8px;
-  max-width: 72ch; }
+.field :is(h3, h4) { margin: 0 0 3px; font-size: 13px; font-family: var(--body); }
+.field .governs { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
 .ctrl { display: flex; align-items: center; gap: 13px; }
 .ctrl input[type=range] { flex: 1; accent-color: var(--accent); }
 .ctrl input[type=number], .ctrl select, .ctrl input[type=text] {
@@ -339,7 +501,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .finding.critical { border-left-color: var(--alert); }
 .finding.serious { border-left-color: var(--warn); }
 .finding.moderate { border-left-color: var(--accent); }
-.finding h4 { margin: 0 0 4px; font-size: 13px; font-family: var(--body); }
+.finding :is(h3, h4) { margin: 0 0 4px; font-size: 13px; font-family: var(--body); }
 .finding p { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
 .finding .fix { font-size: 12px; color: var(--ok); }
 .finding .quote { font-size: 11.5px; font-style: italic; color: var(--ink);
@@ -482,6 +644,10 @@ body.tour-open { overflow: hidden; }
 }
 
 /* The spotlit control is lifted above the mask so it reads at full strength. */
+/* Lifted above .tour (200) so the mask's dark shadow does not cover it, but
+   below .tour-card (202) so the card is never hidden behind it. All three sit in
+   the root stacking order — which is why the card is a sibling of #tour in the
+   markup rather than a child. */
 .tour-lit { position: relative; z-index: 201; }
 
 .tour-card {
@@ -502,3 +668,1554 @@ body.tour-open { overflow: hidden; }
 .tour-actions .btn { padding: 6px 14px; font-size: 12px; }
 
 .tour-chip { cursor: pointer; }
+
+
+/* ------------------------------------------------------- framework + gate */
+
+/* The framework tag on the rail carries the state at a glance: needs setting up,
+   loaded but provisional, or adopted and authoritative. */
+.rail-item .tag.ok   { border-color: var(--ok);    color: var(--ok); }
+.rail-item .tag.warn { border-color: var(--warn);  color: var(--warn); }
+.rail-item .tag.bad  { border-color: var(--alert); color: var(--alert); }
+.rail-item.active .tag.ok,
+.rail-item.active .tag.warn,
+.rail-item.active .tag.bad { border-color: rgba(255,255,255,.5); color: #fff; }
+
+.rail-item.rail-framework { font-weight: 600; }
+
+/* Locked sections stay visible but are plainly not available. Hiding them would
+   leave someone wondering where the app went; greying them shows what is waiting
+   on the framework. */
+.rail-item.rail-locked { opacity: .42; cursor: not-allowed; }
+.rail-item.rail-locked:hover { background: none; }
+
+.fw-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+
+.fw-routes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+.fw-route {
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  background: var(--surface-2);
+}
+.fw-route b { display: block; margin-bottom: 5px; }
+@media (max-width: 900px) { .fw-routes { grid-template-columns: 1fr; } }
+
+/* ------------------------------------------------------------- welcome */
+
+.welcome {
+  position: fixed; inset: 0; z-index: 160;
+  display: grid; place-items: center; padding: 24px;
+  background: radial-gradient(ellipse at 50% 10%, #16323f 0%, #0a1a22 60%, #050e13 100%);
+}
+body.welcome-open { overflow: hidden; }
+
+.wel-card {
+  width: min(880px, 100%);
+  background: var(--surface); color: var(--ink);
+  border-radius: 16px; overflow: hidden;
+  box-shadow: 0 26px 70px rgba(0,0,0,.45);
+  display: grid; grid-template-columns: 300px 1fr;
+}
+@media (max-width: 780px) { .wel-card { grid-template-columns: 1fr; } }
+
+.wel-art {
+  background: var(--chrome); display: grid; place-items: center; padding: 22px;
+}
+.wel-art svg { width: 100%; height: auto; }
+/* One vocabulary for all six diagrams, so they read as a set. */
+.wa-paper  { fill: #ffffff; stroke: rgba(255,255,255,.5); stroke-width: 1; }
+.wa-screen { fill: rgba(255,255,255,.14); stroke: rgba(255,255,255,.4); }
+.wa-empty  { fill: none; stroke: rgba(255,255,255,.3); stroke-dasharray: 4 3; }
+.wa-locked { fill: rgba(255,255,255,.07); stroke: rgba(255,255,255,.18); }
+.wa-void   { fill: none; stroke: var(--alert-on-dark); stroke-width: 2; }
+.wa-strike { stroke: var(--alert-on-dark); stroke-width: 2; }
+.wa-line     { stroke: rgba(10,30,40,.5); stroke-width: 2; }
+.wa-line-lit { stroke: var(--highlight); stroke-width: 2; }
+.wa-arrow  { stroke: var(--highlight); stroke-width: 2; fill: none;
+             marker-end: none; }
+.wa-core   { fill: var(--accent); stroke: var(--highlight); stroke-width: 1.5; }
+.wa-core-t { fill: #fff; font: 700 9px var(--body); text-anchor: middle;
+             letter-spacing: .5px; }
+.wa-spoke  { stroke: rgba(255,255,255,.34); stroke-width: 1.5; }
+.wa-spoke-t{ fill: rgba(255,255,255,.72); font: 9.5px var(--body); }
+.wa-q      { fill: rgba(255,255,255,.4); font: 700 20px var(--serif); text-anchor: middle; }
+.wa-tick   { fill: var(--ok); font: 700 34px var(--body); text-anchor: middle; }
+.wa-lock-t { fill: rgba(255,255,255,.42); font: 9.5px var(--body); text-anchor: middle; }
+.wa-opt    { fill: rgba(255,255,255,.85); font: 10.5px var(--body); text-anchor: middle; }
+.wa-sig    { fill: var(--highlight); font: 700 26px var(--serif); text-anchor: middle; }
+
+.wel-body { padding: 30px 32px 8px; }
+.wel-kicker {
+  margin: 0 0 6px; font-size: 10.5px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--accent-text); font-weight: 700;
+}
+.wel-card h2 { margin: 0 0 10px; font-size: 24px; line-height: 1.2; }
+.wel-text { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--muted); }
+
+.wel-foot {
+  grid-column: 2; padding: 14px 32px 22px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+@media (max-width: 780px) { .wel-foot { grid-column: 1; } }
+.wel-dots { display: flex; gap: 6px; }
+.wel-dots i {
+  width: 22px; height: 3px; border-radius: 2px; background: var(--line);
+  display: block;
+}
+.wel-dots i.on { background: var(--accent); }
+.wel-bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.wel-bar span { display: block; height: 100%; background: var(--accent);
+                transition: width .5s linear; }
+.wel-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.wel-actions .btn small { opacity: .75; font-weight: 400; }
+
+
+/* --------------------------------------------------- the seven-step lifecycle */
+
+/* ------------------------------------------- the seven-step lifecycle board
+
+   The client's own diagram: seven columns left to right, an arrow between each,
+   a "why it matters" panel inside every column, deliverables beneath it, then a
+   cross-cutting band and four closing claims.
+
+   Rebuilt in markup rather than shown as the supplied image. An image would be
+   fixed-width on a laptop, would not re-colour with the agency's palette, and
+   its text could not be selected, searched or read aloud. The data was already
+   in LIFECYCLE; only the layout was missing.
+
+   Seven columns need horizontal room, so the board scrolls sideways rather than
+   crushing each column to nothing. Below 1100px it becomes a single stack —
+   still in order, still complete. */
+.lc-board {
+  display: flex; align-items: stretch; gap: 0;
+  margin-top: 14px; padding-bottom: 6px;
+  overflow-x: auto;
+  /* Land on whole columns.
+   *
+   * Without this the board stops wherever the drag ended, which left a
+   * column sliced down the middle at the right-hand edge — "Publish t…",
+   * "the work…", "VPAT 8…" — and a half-column of clipped words reads as a
+   * broken layout rather than as something you can scroll. Snapping means
+   * every resting position shows complete columns. */
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+}
+.lc-col {
+  flex: 1 1 0; min-width: 178px;
+  display: flex; flex-direction: column;
+  padding: 12px 13px 14px; border-radius: 9px;
+  border: 1px solid var(--line); border-top: 3px solid var(--accent-2);
+  background: var(--surface);
+  scroll-snap-align: start;
+}
+/* `.lc-step-no` stood here. It styled a "STEP 03" eyebrow above each column
+   of the board on the home screen, and it is gone rather than merely unused,
+   because a rule left in the sheet is an invitation to put the markup back.
+   The spine forbids rendering a gate as a number anywhere in this product:
+   the names are the sequence, and the order of the columns says the rest. */
+.lc-title {
+  margin: 3px 0 6px; font-size: 15px; font-weight: 700; color: var(--accent-text);
+}
+.lc-does { margin: 0 0 9px; font-size: 11.5px; line-height: 1.5; color: var(--ink); }
+/* The persuading part, so it is boxed to be read rather than skimmed. */
+.lc-why {
+  padding: 8px 9px; border-radius: 6px; background: var(--surface-2);
+  border-left: 2px solid var(--ok);
+}
+.lc-why-h {
+  font-size: 8.5px; letter-spacing: 1.1px; text-transform: uppercase;
+  font-weight: 700; color: var(--ok); margin-bottom: 3px;
+}
+.lc-why p { margin: 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
+.lc-gives-h {
+  margin-top: 11px; font-size: 8.5px; letter-spacing: 1.1px;
+  text-transform: uppercase; font-weight: 700; color: var(--muted);
+}
+.lc-gives {
+  margin: 5px 0 0; padding: 0; list-style: none;
+  font-size: 11px; line-height: 1.45; color: var(--ink);
+}
+.lc-gives li {
+  padding: 4px 0 4px 11px; position: relative;
+  border-bottom: 1px dotted var(--line);
+}
+.lc-gives li:last-child { border-bottom: 0; }
+.lc-gives li::before {
+  content: "•"; position: absolute; left: 0; color: var(--ok);
+}
+/* The arrow between columns, exactly as the diagram has it. */
+.lc-arrow {
+  flex: none; align-self: center; padding: 0 3px;
+  font-size: 19px; line-height: 1; color: var(--accent-2);
+}
+/* Step 1 is the one they are on; the other six are context. */
+.lc-col.lc-now {
+  border-top-color: var(--action); background: var(--surface-2);
+  box-shadow: 0 0 0 1px var(--action) inset;
+}
+.lc-here {
+  margin-top: 10px; align-self: flex-start;
+  font-size: 9px; letter-spacing: .8px; text-transform: uppercase;
+  font-weight: 700; padding: 3px 8px; border-radius: 20px;
+  background: var(--action); color: var(--on-action);
+}
+
+.lc-cross {
+  margin-top: 16px; padding: 13px 15px; border-radius: 9px;
+  background: var(--surface-2); border-left: 3px solid var(--accent);
+}
+.lc-cross-h {
+  font-size: 9.5px; letter-spacing: 1.3px; text-transform: uppercase;
+  font-weight: 700; color: var(--accent-text); margin-bottom: 9px;
+}
+.lc-cross-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 11px 22px; font-size: 11.5px; line-height: 1.5; color: var(--muted);
+}
+.lc-cross-grid b { color: var(--ink); }
+
+.lc-claims {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px 22px; margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.lc-claims div { border-left: 2px solid var(--accent-2); padding-left: 11px; }
+.lc-claims b {
+  display: block; font-size: 12px; color: var(--accent-text); margin-bottom: 3px;
+}
+.lc-claims span { font-size: 11px; line-height: 1.5; color: var(--muted); }
+
+/* Seven columns stop being seven columns on a laptop. Stack rather than
+   shrink — a column narrow enough to fit is too narrow to read. */
+@media (max-width: 1100px) {
+  .lc-board { flex-direction: column; gap: 8px; overflow-x: visible; }
+  .lc-arrow { display: none; }
+  .lc-col { min-width: 0; }
+}
+
+/* A subscription heading, so "greyed out" reads as a product boundary rather
+   than a fault. */
+.rail-badge {
+  font-size: 8.5px; letter-spacing: .4px; padding: 1px 5px; border-radius: 4px;
+  border: 1px solid var(--line); color: var(--muted); font-weight: 600;
+  text-transform: none; letter-spacing: .3px;
+}
+
+
+/* A tester session has its gates open. It must be impossible to mistake for a
+   real one — hence a loud badge rather than a subtle one. */
+.tester-chip {
+  background: var(--alert-fill); color: var(--alert-on-dark);
+  border-color: var(--alert); letter-spacing: .6px; cursor: help;
+}
+
+
+
+/* The free/paid line, drawn where the client drew it: the governance framework
+   is the free offering and everything downstream is an addition. Marked on both
+   sides — a lone "subscription" badge reads as a warning, whereas a pair reads
+   as a price list. */
+.rail-badge.free { background: var(--ok); color: var(--surface); }
+
+/* Sign out sits with the avatar, deliberately quiet. It is a door, not an
+   action anyone should be drawn towards — the loud button in this application
+   is the one that saves a version.
+
+   "Quiet" was taken too literally the first time. This chip sits on --chrome,
+   the near-black navy header, but it was coloured with --muted and --line,
+   which are the tokens for grey text and hairlines on a *light page*. Dark
+   slate on near-black measures 2.5:1 — under the 4.5:1 this repo holds itself
+   to, and in practice a pill outline with no readable word in it. Every other
+   chip in the header inherits .tb-chip's on-chrome colours; this one opted out
+   of them and got the page's instead. It is quiet now by being dimmer white
+   rather than by being a different colour space. */
+.signout-chip {
+  border: 1px solid rgba(255, 255, 255, .42);   /* 4.0:1 — the outline is a
+                                                   control boundary, so it is
+                                                   held to 3:1, not 4.5 */
+  background: transparent;
+  color: rgba(255, 255, 255, .82);              /* 11.6:1 on --chrome */
+}
+.signout-chip:hover {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .5);
+  color: var(--on-chrome);
+}
+.signout-chip:focus-visible {
+  outline: 2px solid var(--on-chrome); outline-offset: 1px;
+}
+
+/* The application's own confirmation, because the browser's can be switched
+   off — see askConfirm() in app.js. */
+.confirm-veil {
+  position: fixed; inset: 0; z-index: 600;
+  display: grid; place-items: center;
+  background: rgba(4, 14, 22, .58);
+}
+.confirm-card {
+  width: min(430px, calc(100vw - 32px));
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px 22px 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .3);
+}
+.confirm-card :is(h2, h3) { margin: 0 0 8px; font-size: 16px; }
+.confirm-card p { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* The beta notice. Wider than a confirmation, because it is read rather than
+   answered, and its text is ink rather than muted grey — this is the thing
+   on screen, not a caption to it. Scrolls inside itself so it cannot clip at
+   200% zoom or on a short window. */
+.beta-card {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.beta-card p { color: var(--ink); }
+.beta-card .small { color: var(--muted); }
+/* The dialog takes focus when it opens, so a screen reader reads it. Its ring
+   stays visible — a first draft removed it with `outline: none` to keep the
+   card clean, and a removed focus indicator is exactly what WCAG 2.4.7 rules
+   out, whoever the focus was put there by. */
+.beta-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.beta-points { margin: 0 0 14px; padding-left: 18px; font-size: 13px; }
+.beta-points li { margin-bottom: 8px; line-height: 1.45; }
+
+/* Present for everybody, in the header's own outline style, so it reads as
+   a label that can be pressed rather than as an alarm. */
+.beta-chip {
+  border: 1px solid rgba(255, 255, 255, .42);
+  background: transparent;
+  color: rgba(255, 255, 255, .82);
+  letter-spacing: .6px; text-transform: uppercase; font-size: 10.5px;
+}
+.beta-chip:hover { background: rgba(255, 255, 255, .12); color: var(--on-chrome); }
+.beta-chip:focus-visible { outline: 2px solid var(--on-chrome); outline-offset: 1px; }
+
+/* The project spine reads as a row of links, so when the sections behind it are
+   locked it has to say so rather than absorbing clicks in silence. Reported as
+   "this header isn't clickable", which is precisely what a live-looking control
+   that does nothing feels like. */
+.spine-gated .gate,
+.spine-gated .spine-proj { cursor: not-allowed; opacity: .55; }
+.spine-gated .gate:hover { background: none; }
+/* Where they *are* live, make that visible on hover rather than leaving the
+   affordance to the cursor alone. */
+.spine:not(.spine-gated) .spine-proj:hover b { text-decoration: underline; }
+.spine .gate:focus-visible,
+.spine .spine-proj:focus-visible {
+  outline: 2px solid var(--highlight); outline-offset: 2px;
+}
+
+/* The boot veil. Covers the shell until app.js has the state it needs to lock
+   the parts that should be locked — see the comment on <body class="booting">. */
+body.booting .shell,
+body.booting .topbar,
+body.booting .spine { visibility: hidden; }
+body.booting { overflow: hidden; }
+.booting-veil { display: none; }
+body.booting .booting-veil {
+  display: flex; position: fixed; inset: 0; z-index: 400;
+  flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: var(--surface);
+}
+.booting-mark {
+  font-size: 13px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--accent-text); font-weight: 700;
+}
+.booting-note { font-size: 12.5px; color: var(--muted); }
+.booting-note::after {
+  content: ""; display: inline-block; width: 1em; text-align: left;
+  animation: booting-dots 1.2s steps(4, end) infinite;
+}
+@keyframes booting-dots { 0% { content: ""; } 25% { content: "."; }
+  50% { content: ".."; } 75% { content: "..."; } }
+
+/* ------------------------------------------------- the framework builder
+
+   Thirteen sections, walked one at a time. Each question quotes the sentence in
+   the reference framework that produced it, states the reference setting as the
+   visible default, and — where a choice gives something up — makes the person
+   read the consequence before the answer will be taken. */
+
+.fb-count { text-align: right; }
+.fb-count b { display: block; font-size: 22px; color: var(--accent-text); }
+.fb-count span { font-size: 11px; color: var(--muted); }
+.fb-bar {
+  height: 5px; border-radius: 3px; background: var(--surface-2);
+  margin-top: 12px; overflow: hidden;
+}
+.fb-bar i { display: block; height: 100%; background: var(--ok); transition: width .3s; }
+
+.fb-section {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%;
+  text-align: left; padding: 11px 12px; border-radius: 9px;
+  border: 1px solid var(--line); margin-top: 7px; color: var(--ink);
+}
+.fb-section:hover:not(:disabled) { background: var(--surface-2); }
+.fb-section:disabled { opacity: .5; cursor: not-allowed; }
+.fb-section.done { border-left: 3px solid var(--ok); }
+.fb-no {
+  flex: none; width: 25px; height: 25px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+}
+.fb-section.done .fb-no {
+  background: var(--ok); color: var(--surface); border-color: var(--ok);
+}
+.fb-main { flex: 1; }
+.fb-title { display: block; font-weight: 600; font-size: 13px; }
+.fb-purpose { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.fb-state { flex: none; font-size: 11px; color: var(--muted); text-align: right; }
+.fb-state b.ok { color: var(--ok); }
+.fb-state em { font-style: normal; opacity: .8; }
+.fb-fixed { display: block; font-size: 9.5px; opacity: .7; }
+
+.fb-q { border-left: 3px solid var(--line); }
+.fb-q.answered { border-left-color: var(--ok); }
+.fb-tag {
+  display: inline-block; font-size: 8.5px; letter-spacing: 1.1px;
+  text-transform: uppercase; font-weight: 700; padding: 2px 7px;
+  border-radius: 4px; background: var(--surface-2); color: var(--muted);
+}
+.fb-tag.identity   { color: var(--accent-text); }
+.fb-tag.citation   { color: var(--warn); }
+.fb-tag.posture    { color: var(--ok); }
+.fb-tag.aspiration { color: var(--accent-text); }
+.fb-tag.fixed      { color: var(--alert); }
+
+/* The sentence that produced the question. Quoting it is the difference between
+   filling in a form and being asked about your own document. */
+.fb-source {
+  margin: 9px 0 0; padding: 8px 11px; border-left: 2px solid var(--accent-2);
+  background: var(--surface-2); font-size: 11.5px; line-height: 1.55;
+  color: var(--muted); font-style: italic;
+}
+.fb-ask { margin: 12px 0 10px; font-size: 14px; font-weight: 600; }
+.fb-default {
+  font-size: 11.5px; line-height: 1.5; color: var(--muted);
+  padding: 8px 10px; border-radius: 6px; background: var(--surface-2);
+  margin-bottom: 9px;
+}
+.fb-default b { color: var(--ink); }
+.fb-options { display: flex; flex-direction: column; gap: 6px; }
+.fb-option {
+  display: flex; gap: 9px; align-items: flex-start; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 7px; cursor: pointer;
+  font-size: 12.5px; line-height: 1.45;
+}
+.fb-option:hover { background: var(--surface-2); }
+.fb-option em { font-style: normal; font-size: 10px; color: var(--muted); }
+.fb-q textarea, .fb-q input[type="text"] {
+  width: 100%; margin-top: 8px; padding: 8px 10px; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); font-size: 12.5px; line-height: 1.5;
+}
+
+/* Moving off the default here gives something up. It is stated in full, and the
+   answer is refused until it has been explicitly accepted. */
+.fb-warn {
+  margin-top: 11px; padding: 11px 13px; border-radius: 8px;
+  border: 1px solid var(--alert); background: var(--alert-fill);
+}
+.fb-warn b { font-size: 12.5px; }
+.fb-warn p { margin: 6px 0 0; font-size: 12px; line-height: 1.55; }
+.fb-abrogates-h { font-weight: 600; }
+.fb-warn ul { margin: 5px 0 0; padding-left: 18px; font-size: 11.5px; line-height: 1.5; }
+.fb-accept {
+  display: flex; gap: 8px; align-items: flex-start; margin-top: 10px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.fb-prop { margin: 9px 0 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
+.fb-prop b { color: var(--ink); font-weight: 600; }
+.fb-saved { font-size: 11.5px; color: var(--ok); font-weight: 600; align-self: center; }
+.fb-fixed-row { border-left: 3px solid var(--alert); }
+
+/* ------------------------------------------------------------------ usage
+   IIA's own view of who is using the product. Plain tables on purpose: it is
+   read to answer a question, not admired.
+
+   Accessibility, which is a hard acceptance criterion on every IIA product:
+   the progress bar carries `role="img"` and an `aria-label` giving the same
+   figures in words, so it is not the only way to read the number; the number
+   is printed underneath it as well. Test rows are dimmed *and* tagged, never
+   colour alone. */
+.us-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+.us-tile {
+  flex: 1 1 140px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2, transparent);
+}
+.us-tile b { display: block; font-size: 1.5rem; line-height: 1.15; }
+.us-tile span { display: block; font-size: 0.9rem; margin-top: 2px; }
+.us-tile i {
+  display: block;
+  font-style: normal;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.us-caveat {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--line);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.us-caveat b { color: var(--ink); }
+
+.us-bar {
+  height: 8px;
+  min-width: 90px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.us-bar i { display: block; height: 100%; background: var(--accent); }
+
+/* Dimmed and tagged. The tag is what carries the meaning — a row that is only
+   paler is a row nobody using a screen reader, or a bright monitor, can tell
+   apart from the rest. */
+.us-test { opacity: 0.66; }
+.us-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* A possible typo, under the field it was typed into. Quiet on purpose: it is
+   a suggestion about somebody's prose, and it should not shout. */
+.fb-spell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--warn, #b8860b);
+  background: var(--warn-fill, rgba(184, 134, 11, 0.07));
+  font-size: 0.9rem;
+}
+.fb-spell span { flex: 1 1 260px; }
+.fb-spell .btn { padding: 3px 10px; font-size: 0.85rem; }
+
+/* ---------------------------------------------------- Start Here, and after
+
+   The opening panel says why AI governance matters before it says how this
+   software works. It is the client's own wording and it is the first thing a
+   director reads, so it gets room to breathe rather than being one card among
+   several. */
+/* Larger and more open than a normal intro — this is the paragraph a
+   director reads. No measure of its own: the column sets it. */
+.fw-start .intro { font-size: 13.5px; line-height: 1.65; }
+.btn-lg { padding: 11px 26px; font-size: 14px; font-weight: 600; }
+
+/* Questions grouped by who should answer them: leadership sets direction,
+   legal confirms what binds it, technical says how it will run. One person
+   guessing on everyone's behalf is how a framework ends up unenforceable. */
+.fb-group {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 20px 0 2px; padding: 8px 12px; border-radius: 7px;
+  background: var(--surface-2); border-left: 3px solid var(--accent);
+}
+.fb-group-name {
+  font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase;
+  font-weight: 700; color: var(--accent-text);
+}
+.fb-group-hint { flex: 1; font-size: 11.5px; color: var(--muted); }
+.fb-group-n { font-size: 10.5px; color: var(--muted); }
+
+/* What the framework unlocks. Dimmed and padlocked, because these are the paid
+   modules — showing them as a plain list read as a promise they were included. */
+.fw-deps .fw-locked-table { opacity: .62; }
+.fw-deps .fw-locked-table td { font-size: 12px; }
+
+/* --------------------------------------------- what the agency already has
+
+   Above the sections, because it changes what they ask. A passage from the
+   agency's own acceptable use policy that answers a question is offered with
+   the file it came from, and never accepted on their behalf. */
+.fb-intake { border-left: 3px solid var(--accent); }
+.fb-docs { margin-top: 14px; display: flex; flex-direction: column; gap: 7px; }
+.fb-doc {
+  display: flex; align-items: center; gap: 11px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.fb-doc-icon { color: var(--accent-text); font-size: 15px; }
+.fb-doc-main { flex: 1; }
+.fb-doc-main b { display: block; font-size: 12.5px; }
+.fb-doc-main span { font-size: 11px; color: var(--muted); }
+.fb-upload {
+  margin-top: 14px; padding: 12px; border-radius: 8px;
+  border: 1px dashed var(--line); background: var(--surface-2);
+}
+.fb-upload input[type="text"] {
+  padding: 8px 10px; border-radius: 7px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font-size: 12.5px;
+}
+.fb-upload input[type="file"] { font-size: 12px; color: var(--muted); }
+
+/* A suggestion, with its source. Deliberately not styled as an answer: it is
+   quoted, attributed, and needs a click to become one. */
+.fb-evidence {
+  margin-top: 12px; padding: 11px 13px; border-radius: 8px;
+  background: var(--surface-2); border-left: 3px solid var(--ok);
+}
+.fb-ev-h {
+  font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase;
+  font-weight: 700; color: var(--ok); margin-bottom: 7px;
+}
+.fb-ev-quote {
+  margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--surface);
+  font-size: 11.5px; line-height: 1.6; color: var(--ink);
+  white-space: pre-wrap;
+}
+.fb-ev-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin: 6px 0 10px; font-size: 11px; color: var(--muted);
+}
+.fb-evidence .small { margin: 0; }
+
+/* --------------------------------------------------------- voice navigation
+
+   A microphone in the header, and a line under it saying what was heard. That
+   line is the feature, not decoration: a voice control that acts silently
+   cannot be trusted, because its failure mode is not "nothing happened" but
+   "something else happened". */
+.voice-chip { letter-spacing: .2px; }
+.voice-chip.off { opacity: .45; }
+.voice-chip.on {
+  background: var(--alert); color: var(--alert-on-dark, #fff);
+  border-color: var(--alert); animation: voice-pulse 1.1s infinite;
+}
+@keyframes voice-pulse { 50% { opacity: .6; } }
+
+.voice-status {
+  position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 10px);
+  z-index: 300; max-width: 620px; padding: 10px 16px; border-radius: 10px;
+  background: var(--chrome); color: #fff; font-size: 12.5px; line-height: 1.5;
+  box-shadow: 0 10px 30px rgba(0,0,0,.3);
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+}
+.voice-status.show { opacity: 1; transform: translate(-50%, 0); }
+.voice-status.ok  { border-left: 3px solid var(--ok); }
+.voice-status.bad { border-left: 3px solid var(--warn); }
+
+
+
+/* ------------------------------------------------------------ help launcher
+
+   Fixed to the bottom right, where people look for help. Everything that used
+   to be scattered — the tour chip in the header, the bug dock, the intro, the
+   command palette — opens from here.
+
+   Coloured from the agency's own palette rather than a fixed brand. Every other
+   surface here is themed that way, and a help panel in somebody else's colours
+   would be the one thing on screen that belonged to a different product. */
+
+/* Both corner buttons live in one rail, and the rail is what drags. See
+   dock.js — the position is set there, in pixels, so everything here is only
+   the resting place it starts from. */
+.dock-rail {
+  position: fixed; right: 20px; bottom: 20px; z-index: 240;
+  display: flex; align-items: center; gap: 12px;
+  touch-action: none;          /* a drag is a drag, not a page scroll */
+}
+.dock-rail.dragging, .dock-rail.dragging * { cursor: grabbing; }
+
+.guide-dock {
+  position: relative; order: 2; z-index: 240;
+  width: 50px; height: 50px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--chrome); color: #fff;
+  font-size: 22px; font-weight: 700; line-height: 1;
+  box-shadow: 0 6px 22px rgba(0,0,0,.3);
+  transition: transform .15s, box-shadow .15s;
+}
+.guide-dock:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,0,0,.36); }
+.guide-dock:focus-visible { outline: 3px solid var(--highlight); outline-offset: 2px; }
+
+.guide-panel {
+  position: fixed; right: 20px; bottom: 82px; z-index: 241;
+  width: min(392px, calc(100vw - 40px));
+  max-height: min(620px, calc(100vh - 120px));
+  display: flex; flex-direction: column;
+  border-radius: 16px; overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 20px 50px rgba(0,0,0,.34);
+  border: 1px solid var(--line);
+}
+
+.g-head {
+  display: flex; align-items: center; gap: 12px; padding: 15px 16px;
+  background: var(--chrome); color: #fff; flex: none;
+}
+.g-badge {
+  width: 36px; height: 36px; border-radius: 10px; flex: none;
+  display: grid; place-items: center; font-size: 17px; font-weight: 700;
+  background: rgba(255,255,255,.18);
+}
+.g-title { flex: 1; line-height: 1.3; }
+.g-title b { display: block; font-size: 14.5px; }
+.g-title span { font-size: 11.5px; opacity: .8; }
+.g-close {
+  width: 30px; height: 30px; border-radius: 8px; color: #fff;
+  font-size: 19px; line-height: 1; flex: none;
+}
+.g-close:hover { background: rgba(255,255,255,.16); }
+
+.g-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 18px 16px; }
+
+.g-hero {
+  width: 52px; height: 52px; margin: 4px auto 14px; border-radius: 13px;
+  display: grid; place-items: center; font-size: 24px; font-weight: 700;
+  background: var(--chrome); color: #fff;
+}
+.g-h { margin: 0 0 6px; font-size: 15px; font-weight: 700; text-align: center; }
+.g-sub {
+  margin: 0 0 16px; font-size: 12.5px; line-height: 1.55; color: var(--muted);
+  text-align: center;
+}
+.g-eyebrow {
+  font-size: 9.5px; letter-spacing: 1.3px; text-transform: uppercase;
+  font-weight: 700; color: var(--accent-text); margin: 0 0 8px;
+}
+
+.g-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  text-align: left; padding: 11px 12px; margin-bottom: 8px;
+  border: 1px solid var(--line); border-radius: 11px; color: var(--ink);
+}
+.g-item:hover { background: var(--surface-2); border-color: var(--accent-2); }
+.g-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.g-ico {
+  width: 36px; height: 36px; border-radius: 10px; flex: none;
+  display: grid; place-items: center; font-size: 15px;
+  background: var(--surface-2); color: var(--accent-text);
+}
+.g-item-main { flex: 1; line-height: 1.35; }
+.g-item-main b { display: block; font-size: 13px; }
+.g-item-main span { font-size: 11.5px; color: var(--muted); }
+
+.g-back {
+  font-size: 11.5px; color: var(--accent-text); margin-bottom: 10px; padding: 0;
+}
+.g-back:hover { text-decoration: underline; }
+.g-block {
+  padding: 10px 12px; margin-bottom: 9px; border-radius: 9px;
+  background: var(--surface-2); border-left: 2px solid var(--accent);
+}
+.g-block b { font-size: 12.5px; }
+.g-block p { margin: 4px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+.g-cite {
+  display: block; margin-top: 6px; font-size: 10px; color: var(--accent-text);
+}
+.g-tip {
+  display: flex; align-items: center; gap: 11px; padding: 8px 2px;
+  font-size: 12px; border-bottom: 1px solid var(--line);
+}
+.g-tip:last-child { border-bottom: 0; }
+.g-tip kbd {
+  flex: none; min-width: 62px; text-align: center; font-family: var(--body);
+  font-size: 10.5px; padding: 3px 7px; border-radius: 5px;
+  border: 1px solid var(--line); background: var(--surface-2);
+}
+
+/* The typed twin of the voice command — same matcher, so both behave the same
+   and one of them can be tested without a microphone. */
+.g-ask {
+  display: flex; gap: 8px; padding: 12px 14px; flex: none;
+  border-top: 1px solid var(--line); background: var(--surface-2);
+}
+.g-ask input {
+  flex: 1; min-width: 0; padding: 10px 13px; border-radius: 22px;
+  border: 1px solid var(--accent-2); background: var(--surface);
+  color: var(--ink); font-size: 12.5px;
+}
+.g-ask input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.g-send {
+  width: 40px; height: 40px; flex: none; border-radius: 50%;
+  background: var(--chrome); color: #fff; font-size: 14px;
+}
+.g-send:hover { opacity: .9; }
+
+/* ------------------------------------------------- reporting, in the panel */
+
+.g-field { display: block; margin-bottom: 12px; }
+.g-field > span {
+  display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px;
+}
+.g-field textarea {
+  width: 100%; padding: 9px 11px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); font-size: 12.5px; line-height: 1.5; resize: vertical;
+}
+.g-field textarea:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+
+/* ------------------------------------------------------------- the queue */
+
+/* These styled the reporter's "What gets sent with this" disclosure, which was
+   removed at the client's request. They stay because the team's ticket view
+   uses the same classes to show what a report actually carried — which is the
+   one place that list is still worth reading. */
+.bug-attached { margin-top: 6px; }
+.bug-attached summary {
+  cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--accent-text);
+}
+.bug-attached .small { margin: 8px 0; }
+.bug-context {
+  display: flex; flex-wrap: wrap; gap: 5px 14px; margin: 8px 0;
+  font-size: 10.5px; color: var(--muted);
+}
+.bug-context b { color: var(--ink); font-weight: 600; margin-right: 3px; }
+.bug-events {
+  margin: 8px 0 0; padding: 8px 9px; list-style: none; max-height: 180px;
+  overflow-y: auto; border-radius: 7px; background: var(--surface-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px;
+  line-height: 1.55;
+}
+.bug-events li { padding: 2px 0; word-break: break-word; }
+.bug-events b {
+  display: inline-block; min-width: 52px; color: var(--muted);
+  text-transform: uppercase; font-size: 8.5px; letter-spacing: .5px;
+}
+.bug-events i { font-style: normal; color: var(--accent-text); margin-right: 4px; }
+.bug-events .ev-error b { color: var(--alert); }
+.bug-events .ev-warn  b { color: var(--warn); }
+
+.bug-filters { display: flex; flex-wrap: wrap; gap: 5px; }
+.bug-filters .btn { padding: 4px 10px; font-size: 11px; }
+.bug-filters .btn.on { background: var(--chrome); color: #fff; }
+.bug-ticket { border-left: 3px solid var(--line); }
+.bug-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; font-weight: 700; margin-right: 8px;
+}
+.bug-said { margin: 10px 0 0; font-size: 12.5px; line-height: 1.55; }
+.bug-said b { color: var(--accent-text); }
+.bug-reply {
+  margin-top: 10px; padding: 9px 11px; border-radius: 7px;
+  background: var(--surface-2); font-size: 12px; line-height: 1.5;
+}
+.bug-reply.team { border-left: 2px solid var(--ok); }
+.bug-reply p { margin: 4px 0 0; }
+.bug-ticket select, .bug-ticket input[type="text"] {
+  padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ the bell
+
+   Left of the help button, same corner. It is the other half of the bug panel:
+   somebody reports a fault, and without this the only way to learn whether
+   anyone looked at it is to go hunting for the ticket. */
+/* order: 1 keeps the bell to the left of the "?" whichever script ran first —
+   the client asked for it on that side, and init order is not a guarantee. */
+.notify-dock {
+  position: relative; order: 1; z-index: 240;
+  width: 50px; height: 50px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); font-size: 18px; line-height: 1;
+  box-shadow: 0 6px 22px rgba(0,0,0,.18);
+  transition: transform .15s, box-shadow .15s;
+}
+.notify-dock:hover { transform: translateY(-2px); }
+.notify-dock:focus-visible { outline: 3px solid var(--highlight); outline-offset: 2px; }
+/* Loud only when there is something unread. A bell that always looks urgent is
+   a bell nobody reads. */
+.notify-dock.has-unread { border-color: var(--alert); }
+.n-badge {
+  position: absolute; top: -2px; right: -2px; min-width: 19px; height: 19px;
+  padding: 0 5px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--alert); color: #fff; font-size: 10.5px; font-weight: 700;
+  border: 2px solid var(--surface);
+}
+
+.notify-panel { right: 20px; }
+
+.n-item {
+  padding: 12px 2px; border-bottom: 1px solid var(--line);
+}
+.n-item:last-child { border-bottom: 0; }
+/* Unread is marked, not hidden — the read ones are still the history of what
+   happened to a report. */
+.n-item.fresh { border-left: 2px solid var(--alert); padding-left: 10px; }
+.n-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.n-when { margin-left: auto; font-size: 10.5px; color: var(--muted); }
+.n-about {
+  margin: 7px 0 0; font-size: 11px; color: var(--muted); line-height: 1.5;
+}
+.n-msg { margin: 6px 0 0; font-size: 12.5px; line-height: 1.55; }
+.n-msg b { color: var(--accent-text); }
+.n-reopen { margin-top: 9px; font-size: 11.5px; padding: 5px 11px; }
+
+/* ------------------------------------------------- Module One's controls
+
+   The builder moved from a mined register to a guided sequence, which brought
+   four controls the old one had no need for: option cards, a matrix, repeatable
+   seat rows, and the "we don't know" pair. `.fb-section`, `.fb-q`, `.fb-ask`
+   and the progress bar above are reused as they were. */
+
+.fb-strap {
+  margin: 2px 0 14px; font-size: 11px; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--accent-text); font-weight: 700;
+}
+.fb-strap span {
+  display: block; margin-top: 3px; letter-spacing: .2px;
+  text-transform: none; font-weight: 400; color: var(--muted);
+}
+/* The number reads as part of the question, not as a label hovering over it.
+   "5.1 — adjust question to be in line with number." */
+.fb-qhead {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;
+}
+.fb-qhead .fb-ask { flex: 1; min-width: 0; margin: 0 0 2px; }
+.fb-qno {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .6px;
+  color: var(--accent-text); margin-right: 9px;
+  /* Tabular, so 5.1 and 10.6 take the same width and the questions below
+     each other start on the same pixel. */
+  font-variant-numeric: tabular-nums;
+}
+.fb-ok { font-size: 10.5px; font-weight: 700; color: var(--ok); margin-left: auto; }
+
+/* Cards rather than a radio list. The spec asks for card layout at 4.1 and the
+   options carry a sentence of explanation each, which a bare radio cannot hold
+   legibly. */
+.fb-cards { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 4px; }
+.fb-card {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 11px 13px; border: 1px solid var(--line); border-radius: 9px;
+  cursor: pointer; background: var(--surface);
+  transition: border-color .12s ease, background .12s ease;
+}
+.fb-card:hover { border-color: var(--accent); background: var(--surface-2); }
+.fb-card.on { border-color: var(--accent); background: var(--accent-fill); }
+.fb-card input { margin-top: 3px; flex: none; }
+.fb-card-main { display: flex; flex-direction: column; gap: 3px; }
+.fb-card-main b { font-weight: 600; font-size: 13px; }
+.fb-note { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.fb-rec {
+  align-self: flex-start; font-size: 9.5px; font-weight: 700;
+  letter-spacing: .5px; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 10px;
+  background: var(--ok-fill); color: var(--ok-on-light);
+  border: 1px solid var(--ok);
+}
+.fb-then { margin: -2px 0 6px 30px; }
+
+/* The matrix. Rows are the things being asked about, columns the same choices
+   for each — 1.4, which the spec calls the single most important question in
+   the module. */
+.fb-matrix { margin: 10px 0 4px; overflow-x: auto; }
+.fb-mrow {
+  display: grid;
+  /* Wide enough for a sentence. 5.1's factors are statements — "it affects
+     someone's money, permit, license, benefits, or job" — not the one-word
+     labels 1.4 has, and in a narrow first column they wrapped into ragged
+     stacks that read as centred even though they were not.
+     "5.1 — make statements left aligned." */
+  grid-template-columns: minmax(230px, 2.6fr) repeat(var(--mcols, 5), 1fr);
+  align-items: center; gap: 4px 8px; padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+/* Said once, on the row, rather than centring everything and then undoing it
+   on the label — which is how the label ended up depending on rule order. */
+.fb-mrow > span:not(.fb-mlabel) { text-align: center; }
+.fb-mrow:last-child { border-bottom: 0; }
+/* A row that arrived already weighted, until they touch it. Marked, not
+   hidden — a pre-set answer nobody can see is one made on their behalf. */
+.fb-preset { background: var(--warn-fill); }
+.fb-preset .fb-mlabel::after {
+  content: "suggested for your kind of organization";
+  font-size: 10px; font-weight: 400; color: var(--muted); margin-top: 2px;
+}
+.fb-mhead {
+  border-bottom: 1px solid var(--line); padding-bottom: 8px;
+  font-size: 10.5px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .3px; text-align: center;
+}
+.fb-mhead span:first-child { text-align: left; }
+.fb-mlabel {
+  text-align: left; font-size: 12.5px; font-weight: 600;
+  display: flex; flex-direction: column;
+  /* A statement that wraps should wrap as a paragraph, not as a column of
+     centred fragments. */
+  line-height: 1.45; align-items: flex-start;
+}
+.fb-mlabel i {
+  font-style: normal; font-size: 10.5px; font-weight: 400; color: var(--muted);
+}
+
+/* The data warehouse — what the organization holds, and whether it answers.
+   The vendor registry is the same kind of screen and shares these rules
+   rather than restating them: `.vr-` is the registry's prefix, `.dh-` the
+   data register's, and where a rule serves both it is written once with both
+   selectors. Two copies of a table style is how two screens drift apart. */
+.dh-tiles, .vr-tiles {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px;
+}
+.dh-tile, .vr-tile {
+  flex: 1 1 140px; padding: 11px 13px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.dh-tile b, .vr-tile b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.dh-tile span, .vr-tile span { font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+.dh-flags, .vr-flags { list-style: none; margin: 12px 0 0; padding: 0; }
+.dh-flags li, .vr-flags li {
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+  font-size: 12.5px; line-height: 1.55;
+}
+.dh-flags li:last-child, .vr-flags li:last-child { border-bottom: 0; }
+.dh-flags span, .vr-flags span { display: block; font-size: 11px; margin-top: 2px; }
+
+.dh-table, .vr-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.dh-table th, .dh-table td, .vr-table th, .vr-table td {
+  text-align: left; vertical-align: top; padding: 9px 10px 9px 0;
+  border-bottom: 1px solid var(--line); font-size: 12.5px; line-height: 1.5;
+}
+.dh-table thead th, .vr-table thead th {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .3px;
+  text-transform: uppercase; color: var(--muted);
+}
+/* A row header, not a column one. The global `th` rule uppercases every table
+   header and drops it to 9.5px, which is right above a column and wrong
+   beside a row — the first cell in both registers is a name somebody typed,
+   and "CaseNote" was coming out as CASENOTE. */
+.dh-table tbody th, .vr-table tbody th {
+  font-weight: 600; font-size: 12.5px; text-transform: none;
+  letter-spacing: 0; color: var(--ink);
+}
+.dh-sub, .vr-sub {
+  display: block; font-size: 11px; color: var(--muted); font-weight: 400;
+  margin-top: 2px;
+}
+.dh-table .btn, .vr-table .btn { padding: 4px 9px; font-size: 11px; }
+
+/* Whether it answered. Never colour alone — the word is the signal and the
+   colour is the reinforcement, which is what WCAG 1.4.1 asks for. */
+.dh-state { font-weight: 600; font-size: 11.5px; }
+.dh-state.up { color: var(--ok); }
+.dh-state.down { color: var(--alert, #b3261e); }
+.dh-state.refused, .dh-state.unchecked { color: var(--muted); }
+
+.dh-grid, .vr-grid {
+  display: grid; gap: 10px 14px; margin-top: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+/* A grid item will not shrink below the intrinsic width of its content unless
+   it is told it may. A <select> carrying an option as long as "Held by a
+   vendor on our behalf" therefore pushed its column past its share and the
+   row overlapped the one beside it — the fields looked like one long smear of
+   borders on a wide window. */
+.dh-grid > *, .vr-grid > * { min-width: 0; }
+.dh-grid input, .dh-grid select, .dh-grid textarea,
+.vr-grid input, .vr-grid select, .vr-grid textarea { width: 100%; }
+
+/* The categories from their own 7.1. A real fieldset with a real legend, so
+   a screen reader announces what the group of checkboxes is for rather than
+   reading eleven unrelated labels in a row. */
+.dh-sens, .vr-sens {
+  margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--surface-2);
+}
+.dh-sens legend, .vr-sens legend {
+  padding: 0 6px; font-size: 12px; font-weight: 700;
+}
+.dh-check, .vr-check {
+  display: flex; gap: 9px; align-items: flex-start; padding: 5px 0;
+  font-size: 12.5px; line-height: 1.5; cursor: pointer;
+}
+.dh-check input, .vr-check input { margin-top: 2px; flex: 0 0 auto; }
+
+/* An outage, said in words at the top of the panel. Bordered rather than
+   filled: a solid alert colour behind body text is where contrast ratios go
+   to die, and the sentence is doing the work anyway. */
+.dh-outage {
+  margin: 12px 0 0; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--alert, #b3261e);
+  border-left-width: 4px; font-size: 12.5px; line-height: 1.55;
+}
+
+/* The review screen — the whole framework read back before anybody signs it.
+   Headings step h2 → h3 → h4 without skipping, which is a WCAG requirement and
+   the thing this app has got wrong before. */
+.sub4 { font-size: 12.5px; margin: 20px 0 8px; }
+/* A button that reads as a link, so "go back to section 4" is one tab stop and
+   one Enter rather than a paragraph telling them to navigate. */
+.linky {
+  background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+  color: var(--accent-ink, var(--ink)); text-decoration: underline;
+}
+.linky:hover { text-decoration: none; }
+
+.fb-clash, .fb-gaps {
+  margin: 14px 0; padding: 13px 14px; border-radius: 8px;
+  background: var(--warn-fill); border: 1px solid var(--warn);
+}
+.fb-clash h3, .fb-gaps h3 { margin-top: 0; }
+.fb-clash ul, .fb-gaps ul { margin: 8px 0 0; padding-left: 18px; }
+.fb-clash li, .fb-gaps li {
+  font-size: 12.5px; line-height: 1.55; margin-bottom: 7px;
+}
+.fb-clash li span, .fb-gaps li span { display: block; font-size: 11px; }
+.fb-noowner { color: var(--alert, #b3261e); font-weight: 600; }
+.fb-clear {
+  margin: 14px 0; padding: 11px 13px; border-radius: 8px; font-size: 12.5px;
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+
+.fb-floorlist { list-style: none; margin: 0; padding: 0; }
+.fb-floorlist li {
+  display: flex; gap: 9px; align-items: flex-start;
+  padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px;
+}
+.fb-floorlist li:last-child { border-bottom: 0; }
+.fb-tick {
+  flex: none; width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); color: var(--muted); font-size: 11px;
+}
+.fb-tick.on {
+  border-color: var(--accent); background: var(--accent-fill);
+  color: var(--ink);
+}
+.fb-floorlist i, .fb-floorlist em {
+  display: block; font-style: normal; font-size: 11px; color: var(--muted);
+}
+.fb-weak { color: var(--alert, #b3261e); font-weight: 600; }
+
+.fb-readback section {
+  padding: 11px 0; border-bottom: 1px solid var(--line);
+}
+.fb-readback section:last-child { border-bottom: 0; }
+.fb-readback h4 {
+  margin: 0 0 7px; font-size: 12.5px;
+  display: flex; gap: 9px; align-items: baseline; flex-wrap: wrap;
+}
+.fb-readback p { margin: 0 0 7px; font-size: 12.5px; line-height: 1.55; }
+.fb-readback b { font-weight: 600; }
+.fb-verbatim {
+  padding-left: 11px; border-left: 2px solid var(--accent);
+  font-style: italic;
+}
+
+/* Their own paragraph. Quiet, because it is never required. */
+.fb-mine textarea { min-height: 66px; }
+
+/* A question whose answer depends on one that has not been given yet. Shown,
+   because hiding it would lose the thread of the step, but not pretending to
+   be fillable. */
+.fb-waiting {
+  margin: 0 0 11px; padding: 10px 12px; border-radius: 8px;
+  font-size: 12px; line-height: 1.5;
+  background: var(--warn-fill); border-left: 3px solid var(--warn);
+  color: var(--ink);
+}
+.fb-greyed { opacity: .45; }
+/* Belt and braces with the `disabled` the wiring sets: `pointer-events: none`
+   alone leaves a keyboard user able to tab straight in. */
+.fb-greyed { pointer-events: none; }
+
+/* An option that became the suggestion because of an earlier answer, saying
+   which one. "In Section _, you selected ABC, therefore you should select
+   XYZ" — a recommendation that cannot say where it came from is the module
+   having an opinion about them. */
+.fb-because {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .2px;
+  color: var(--accent-text);
+}
+
+/* Locked because an exclusive answer is ticked. Marked, not hidden — they
+   have to be able to see what they have ruled out. */
+.fb-card.fb-locked { opacity: .42; }
+.fb-card.fb-locked input { cursor: not-allowed; }
+
+/* Copies of your own work, kept so that wiping the tenant can be something
+   you do before every demo rather than once, finally. */
+.fb-snaps { margin-top: 10px; }
+.fb-snap {
+  display: flex; gap: 9px; align-items: center;
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+.fb-snap:last-of-type { border-bottom: 0; }
+.fb-snap-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fb-snap-main b { font-size: 12.5px; font-weight: 600; }
+.fb-snap-main i {
+  font-style: normal; font-size: 11px; color: var(--muted);
+}
+
+/* Adding a choice we did not think of. Quiet and below the list, so it reads
+   as an escape hatch rather than as another option to consider. */
+.fb-addown {
+  display: flex; gap: 9px; align-items: flex-end; margin-top: 11px;
+  padding-top: 11px; border-top: 1px dashed var(--line);
+}
+.fb-addown .g-field { flex: 1; min-width: 0; }
+.fb-addown .g-field span { font-size: 11.5px; color: var(--muted); }
+.fb-addown .btn { flex: none; }
+
+/* The floor — step 06's eight blocks. The badge says "Required" and means it:
+   the choices underneath are how strict, not whether. "The one place the module
+   is directive, and it should say so out loud rather than sneaking it in." */
+.fb-floor { border-left: 3px solid var(--accent); }
+.fb-floor-no {
+  margin: 0 0 4px; display: flex; align-items: center; gap: 8px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--muted);
+}
+.fb-floor-badge {
+  padding: 2px 8px; border-radius: 999px; letter-spacing: .3px;
+  background: var(--accent-fill); color: var(--accent-ink, var(--ink));
+  border: 1px solid var(--accent);
+}
+.fb-floor-badge.law {
+  background: var(--warn-fill); border-color: var(--warn);
+}
+
+/* The second half of a two-part question — "and who approves it". Indented
+   under the first so it reads as one question, which is how he wrote it. */
+.fb-also {
+  margin-top: 10px; padding-left: 11px;
+  border-left: 2px solid var(--line);
+}
+
+/* Guidance that waits until it is needed. 7.3's readiness panel — "the
+   highest-value advisory moment in the entire module". */
+.fb-advice {
+  margin-top: 12px; padding: 13px 14px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+.fb-advice h4 { margin: 0 0 8px; font-size: 13px; }
+.fb-advice p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.55; }
+.fb-advice p:last-child { margin-bottom: 0; }
+.fb-advice-close { font-weight: 600; }
+
+/* What comes back, and when. */
+.fb-when { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.fb-when th, .fb-when td {
+  text-align: left; vertical-align: top; padding: 8px 10px 8px 0;
+  border-bottom: 1px solid var(--line); font-size: 12px; line-height: 1.5;
+}
+.fb-when thead th {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .3px;
+  text-transform: uppercase; color: var(--muted);
+}
+.fb-when tbody th { font-weight: 600; white-space: nowrap; }
+
+/* One block per level of scrutiny — 5.3, and 9.3 after it. Stacked rather than
+   gridded because the things asked about each level are different kinds of
+   answer, and a grid with mixed controls down one column reads as a puzzle. */
+.fb-tiers { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 4px; }
+.fb-tier {
+  padding: 12px 13px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface-2);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fb-tier > h4 {
+  margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--muted);
+}
+.fb-tier .g-field small { font-size: 11px; line-height: 1.45; }
+.fb-tf { border: 0; padding: 0; margin: 0; min-width: 0; }
+.fb-tf > legend {
+  padding: 0 0 5px; font-size: 12px; font-weight: 600; color: var(--ink);
+}
+.fb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fb-chip {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); font-size: 12px;
+}
+.fb-chip:hover { border-color: var(--accent); }
+.fb-chip.on { border-color: var(--accent); background: var(--accent-fill); }
+.fb-chip input { flex: none; }
+
+/* Repeatable rows — 4.2, who sits in those seats. Role required, name optional,
+   because titles survive turnover and names do not. */
+.fb-rows { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+.fb-seat {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface-2);
+}
+.fb-seat .g-field span i {
+  font-style: normal; color: var(--muted); font-weight: 400;
+}
+
+/* "We don't know", and the owner it produces. Deliberately quiet — it is always
+   available and should never look like the expected answer. */
+.fb-unknown {
+  display: inline-flex; align-items: center; gap: 7px; margin: 10px 0 0;
+  font-size: 12px; color: var(--muted); cursor: pointer;
+}
+.fb-owner {
+  margin-top: 9px; padding: 11px 12px; border-radius: 8px;
+  background: var(--warn-fill); border: 1px solid var(--warn);
+}
+.fb-owner .small { margin: 6px 0 0; }
+.fb-help { margin-top: 10px; line-height: 1.55; }
+
+/* What the organization's own documents say about a question. A quotation
+   with its source, set apart from the answer controls so it never reads as
+   an answer already given. */
+.fb-evidence {
+  margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+  background: var(--surface-2, #f4f1ea); border-left: 4px solid var(--ink, #1d2b36);
+}
+.fb-evidence h4 { margin: 0 0 6px; font-size: 13px; }
+.fb-evidence .fb-ev + .fb-ev { margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--line, #d8d2c4); }
+.fb-evidence blockquote { margin: 0 0 4px; font-style: italic; line-height: 1.5; }
+.fb-evidence .btn { margin-top: 4px; }
+.fb-from { margin: 8px 0 0; }
+
+/* One line, then accept it. Never a dialog, never a block. */
+.fb-consequence {
+  margin: 9px 0 0; padding: 9px 11px; border-radius: 8px;
+  font-size: 12px; line-height: 1.5;
+  background: var(--warn-fill); color: var(--ink);
+  border-left: 3px solid var(--warn);
+}
+
+/* The document building. */
+.fb-parts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.fb-part {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 20px; font-size: 11.5px;
+  border: 1px solid var(--line); color: var(--muted);
+  background: var(--surface-2);
+}
+.fb-part i {
+  font-style: normal; font-size: 10px; font-weight: 700; opacity: .75;
+}
+.fb-part.part { border-color: var(--warn); color: var(--ink); }
+.fb-part.full {
+  border-color: var(--ok); background: var(--ok-fill); color: var(--ok-on-light);
+}
+.fb-section.pending {
+  display: flex; opacity: .5; cursor: default; background: var(--surface-2);
+}
+
+/* ===================================================================
+   Projects — the tracker, and the register
+   ===================================================================
+
+   The tracker is a labelled list, not a progress graphic. Two rules
+   decide every line below.
+
+   Gate status is carried by text as well as by position, because a
+   reader who cannot see the row has to be able to hear which gate the
+   project is at. Each gate carries its own state word; the tint is a
+   second signal, never the only one.
+
+   And no gate is ever numbered. The names are the whole of the
+   sequence, and a number invites a reader to line them up against
+   somebody else's staging scheme. There is deliberately no counter, no
+   "3 of 7", and no percentage anywhere in this family. */
+
+.pj-track {
+  display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; padding: 0;
+  list-style: none;
+}
+.pj-gate {
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 11px; background: var(--surface-2); min-width: 92px;
+}
+.pj-gate .g-name { font-size: 12px; font-weight: 600; display: block; }
+/* The state word. Never dropped, never replaced by the tint alone. */
+.pj-gate .g-was { font-size: 10px; color: var(--muted); display: block;
+  margin-top: 2px; }
+.pj-gate.passed { border-color: var(--ok); background: var(--ok-fill); }
+.pj-gate.here { border-color: var(--warn); background: var(--warn-fill); }
+.pj-gate.ahead { opacity: .65; }
+
+.pj-waiting {
+  font-size: 12.5px; padding: 9px 12px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+/* Recorded after the fact. Ordinary, and said in words rather than
+   flagged — most organisations write their first passages up months
+   late, and nothing here calls that a defect. */
+.pj-late { font-size: 10.5px; color: var(--muted); }
+
+.pj-empty {
+  font-size: 13px; white-space: pre-line; color: var(--muted);
+  padding: 4px 0;
+}
+.pj-empty b { color: var(--ink); }
+
+/* ===================================================================
+   Lifecycle — the reference page
+   ===================================================================
+
+   One column, seven blocks, all expanded at rest. Nothing here is
+   behind a hover, a tooltip or an accordion, and there is no stepper:
+   a person who lands on this page needs to scan the whole thing and
+   then read one part of it.
+
+   This is the page people screenshot into an email, so it has to
+   survive with no context and no surrounding chrome. */
+
+.lcr-step { border-top: 1px solid var(--line); padding: 18px 0 4px; }
+.lcr-step:first-of-type { border-top: 0; padding-top: 0; }
+.lcr-step > h2 { margin: 0 0 2px; font-size: 15px; }
+.lcr-q { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.lcr-part { margin: 0 0 12px; }
+.lcr-part > h3 {
+  margin: 0 0 5px; font-size: 9.5px; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--muted); font-weight: 700;
+  font-family: var(--body);
+}
+.lcr-part p, .lcr-part ul { margin: 0; font-size: 12.5px; }
+.lcr-part ul { padding-left: 18px; }
+.lcr-part li { margin-bottom: 3px; }
+/* The one thing about this step worth flagging. A note, never an
+   alarm — none of these is a warning about the reader. */
+.lcr-flag {
+  font-size: 12px; border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 11px; color: var(--ink);
+}
+.lcr-where { font-size: 12.5px; font-weight: 600; }
+
+/* The loop. Text first and text only — any diagram beside it is
+   decorative and adds nothing this paragraph does not carry. */
+.lcr-loop { white-space: pre-line; font-size: 13px; margin: 0; }
+
+.lcr-floors { overflow-x: auto; }
+.lcr-floors table { min-width: 560px; }
+
+/* The Projects forms. One column of labelled fields, labels always visible
+   above their inputs, and every control at least 24 by 24 pixels — the
+   spec's target size for everything on a project screen. */
+.pj-form { max-width: 560px; }
+.pj-field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px;
+  margin: 0 0 4px; }
+.pj-field > span { font-weight: 600; }
+.pj-field em { font-weight: 400; font-style: normal; color: var(--muted); }
+.pj-field :is(input, select) {
+  min-height: 32px; border: 1px solid var(--line); border-radius: 7px;
+  padding: 6px 9px; background: var(--surface-2); color: var(--ink);
+  font: inherit; font-size: 13px;
+}
+.pj-inline { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;
+  margin: 6px 0 4px; }
+.pj-inline .pj-field { flex: 1 1 180px; margin: 0; }
+.pj-block { border-top: 1px solid var(--line); padding: 12px 0 4px; }
+.pj-block > p { margin: 0 0 6px; font-size: 13px; }
+.pj-binds { margin: 0 0 8px; padding-left: 18px; font-size: 12.5px; }
+.pj-binds li { margin-bottom: 10px; }
+.pj-binds li > .small { display: block; color: var(--muted); }
+.pj-met { display: block; font-size: 12px; color: var(--ok); margin-top: 3px; }
+/* The spine's refusal, word for word. A note rather than an alarm: a
+   refused passage is information about the record, not a fault in the
+   person reading it. */
+.pj-said { border-left: 3px solid var(--warn); padding: 8px 12px;
+  background: var(--warn-fill); border-radius: 0 8px 8px 0; font-size: 13px; }
+
+/* The Vendors form. One column in reading order, every label visible, and
+   help text tied to its field rather than shown on hover. */
+.vr-field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 2px; }
+.vr-field :is(input, select, textarea) { min-height: 32px; }
+.vr-help { margin: 0 0 6px; }
+/* A term row: the term and its echo as one legend, three answers beside. */
+.vr-tri { border: 0; border-top: 1px solid var(--line); margin: 0;
+  padding: 8px 0; display: flex; flex-wrap: wrap; gap: 6px 16px;
+  align-items: center; }
+.vr-tri legend { float: left; width: 100%; font-size: 12.5px;
+  padding: 0 0 4px; }
+.vr-tri label { display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12.5px; min-height: 24px; }
+/* The tick-boxes only. This used to be every `input`, which squeezed the
+   free-text boxes in the same groups ("Another unit…", "Something else") to
+   16 pixels wide — Brett, BUG-A7022EEE: "make text input bigger". */
+.vr-tri input[type="checkbox"], .vr-tri input[type="radio"] { width: 16px; height: 16px; }
+.vr-tri input[type="text"], .vr-tri textarea { width: 100%; box-sizing: border-box;
+  min-height: 36px; font-size: 14px; }
+/* ⓘ beside a label: opens a plain explanation under it. */
+.info-i { display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; margin-left: 6px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line); background: transparent; color: inherit;
+  font: italic 600 12px/1 Georgia, serif; cursor: pointer; vertical-align: middle; }
+.info-i:hover, .info-i[aria-expanded="true"] { background: var(--line); }
+.info-i:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vr-info { margin: 4px 0 6px; padding: 6px 10px; border-left: 3px solid var(--accent); }
+/* 2.3's "Or upload the file", under the paste box. */
+.fb-then-upload { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.vr-tell { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px;
+  margin: 10px 0 0; font-size: 13px; }
+.vr-tell p { margin: 0 0 6px; }
+.vr-warn { border-left: 3px solid var(--warn); padding: 4px 0 4px 10px; }
+/* The money line: text, with figures that align. Never the only place a
+   cost appears — every row carries its own. */
+.vr-money { margin: 10px 0 0; font-size: 13px; font-weight: 600;
+  font-variant-numeric: tabular-nums; }
+.vr-table td.num, .vr-table th.num { text-align: right;
+  font-variant-numeric: tabular-nums; }
+.vr-scroll { overflow-x: auto; }
+.vr-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Integrity: the project row a grouped list sits under. Text carries the
+   meaning; the tint only separates the groups. */
+.ig-group { text-align: left; font-weight: 600; padding: 10px 8px 6px;
+  background: var(--panel-2, transparent); }
+
+
+/* Process: a kind their answers require and nobody has written. Lighter than
+   a real row and still AA; the words say it is missing, not the tint. */
+.pr-ghost th, .pr-ghost td { font-style: italic; background: var(--panel-2, transparent); }
+
+
+/* Oversight: four of the five tiles are links to the rows they counted. The
+   fifth, the concentration count, is never a link. */
+button.ov-tile { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+button.ov-tile:hover { border-color: var(--accent); }
+
+
+/* Data 16 · every table scrolls inside its own container, keyboard-scrollable and labelled. */
+.table-scroll { overflow-x: auto; max-width: 100%; }
+.table-scroll:focus-visible { outline: 3px solid #1a4f8b; outline-offset: 2px; }
+
+
+/* Add a colleague: the three fields and the button on one row where there is
+   room, stacking on a narrow screen. The card keeps the full width; the
+   fields stop stretching across it. */
+.ap-row {
+  display: grid; gap: 12px; align-items: end; margin-bottom: 10px;
+  /* Fields fill the width, however many a form has; the button sits at the
+     end at its own width. */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.ap-row .vr-field { margin: 0; }
+.ap-row .vr-field input,
+.ap-row .vr-field select { width: 100%; box-sizing: border-box; }
+.ap-row .btn { white-space: nowrap; justify-self: start; }
+/* One organization per row on the GAIUS team's Organizations screen. */
+.org-row { border-top: 1px solid var(--line, #ddd); padding: 8px 0; }
+.org-row > summary { cursor: pointer; padding: 4px 0; }
+.org-row[open] > summary { margin-bottom: 8px; }
+@media (max-width: 900px) {
+  .ap-row { grid-template-columns: 1fr; }
+  .ap-row .btn { justify-self: start; }
+}

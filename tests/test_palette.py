@@ -1,6 +1,6 @@
 """Theme invariants.
 
-An agency's brand here is however many colours it actually has — two, three,
+An agency's brand here is however many colors it actually has — two, three,
 eight, twenty — and that list is never padded. These tests exist because the
 padding bug was subtle and looked fine: derived filler followed the same recipe
 for every agency, so the states quietly converged toward one house style while
@@ -8,10 +8,10 @@ each individual palette still looked plausible.
 
 Four things must hold no matter what the scraped sites happen to serve:
 
-  1. Nothing is invented. Every brand role resolves to a colour the agency
-     actually has, so a four-colour agency is themed in exactly those four.
+  1. Nothing is invented. Every brand role resolves to a color the agency
+     actually has, so a four-color agency is themed in exactly those four.
 
-  2. Status colours are universal. Low / Moderate / High risk are identical in
+  2. Status colors are universal. Low / Moderate / High risk are identical in
      all fifty states — a governance record where High renders maroon in one
      state and olive in the next invites misreading.
 
@@ -19,7 +19,7 @@ Four things must hold no matter what the scraped sites happen to serve:
      brand, and a placeholder says so.
 
   4. Text stays legible over whatever the brand turns out to be, without the
-     brand colour being altered to achieve it.
+     brand color being altered to achieve it.
 """
 
 from __future__ import annotations
@@ -40,21 +40,21 @@ PROVENANCE = {"brand", "scraped", "documented", "generated"}
 
 @pytest.mark.parametrize("code", CODES)
 def test_every_role_uses_a_colour_the_agency_actually_has(code: str) -> None:
-    """The central guarantee. A role filled with a synthesised colour is a bug."""
+    """The central guarantee. A role filled with a synthesized color is a bug."""
     e = entry(code)
     owned = set(e.colors)
     for role, colour in e.roles.items():
         assert colour in owned, (
             f"{code}.{role} = {colour} is not one of {e.abbrev}'s "
-            f"{len(owned)} colours: {sorted(owned)}")
+            f"{len(owned)} colors: {sorted(owned)}")
 
 
 @pytest.mark.parametrize("code", CODES)
 def test_colour_list_is_never_padded(code: str) -> None:
     e = entry(code)
     assert e.brand_count == len(e.colors)
-    assert len(set(e.colors)) == len(e.colors), f"{code} lists a colour twice"
-    assert e.colors, f"{code} has no colours at all"
+    assert len(set(e.colors)) == len(e.colors), f"{code} lists a color twice"
+    assert e.colors, f"{code} has no colors at all"
 
 
 @pytest.mark.parametrize("code", CODES)
@@ -64,7 +64,7 @@ def test_all_roles_are_filled(code: str) -> None:
 
 
 def test_a_short_palette_stays_short() -> None:
-    """Two published colours must theme in two, by reuse rather than invention."""
+    """Two published colors must theme in two, by reuse rather than invention."""
     two = ["#14558f", "#f6c51b"]
     built = theme_for(two)
     assert set(built["roles"].values()) <= set(two)
@@ -76,7 +76,7 @@ def test_a_short_palette_stays_short() -> None:
 
 
 def test_a_long_palette_uses_all_of_it() -> None:
-    """Twenty colours must not be silently truncated to a fixed slot count."""
+    """Twenty colors must not be silently truncated to a fixed slot count."""
     many = [f"#{i:02x}3a{(200 - i * 7) % 256:02x}" for i in range(20)]
     built = theme_for(many)
     assert built["brand_count"] == 20
@@ -109,7 +109,7 @@ def test_status_colours_are_identical_in_every_state(code: str) -> None:
     for key, expected in STATUS.items():
         var = f"--{key.replace('_', '-')}"
         assert theme[var] == expected, (
-            f"{code} themed {var} to {theme[var]} — status colours are universal")
+            f"{code} themed {var} to {theme[var]} — status colors are universal")
 
 
 @pytest.mark.parametrize("code", CODES)
@@ -138,7 +138,7 @@ def test_risk_colours_read_as_their_meaning() -> None:
 
 @pytest.mark.parametrize("code", CODES)
 def test_text_over_the_chrome_is_legible(code: str) -> None:
-    """WCAG AA for the nav and header, without altering the brand colour."""
+    """WCAG AA for the nav and header, without altering the brand color."""
     e = entry(code)
     chrome = e.roles["chrome"]
     assert e.theme["--on-chrome"] == readable_on(chrome)
@@ -151,12 +151,12 @@ def test_button_text_is_legible(code: str) -> None:
     """`action` exists precisely so a button fill can always carry text.
 
     A mid-tone accent often cannot clear AA against either black or white, so
-    the role is chosen from the agency's own colours by legibility rather than a
-    colour being adjusted to fit.
+    the role is chosen from the agency's own colors by legibility rather than a
+    color being adjusted to fit.
     """
     e = entry(code)
     action = e.roles["action"]
-    assert action in set(e.colors), f"{code} action colour is not the agency's"
+    assert action in set(e.colors), f"{code} action color is not the agency's"
     assert contrast(e.theme["--on-action"], action) >= 4.5, (
         f"{code} button fill {action} cannot carry legible text")
 
@@ -171,7 +171,7 @@ DARK_BACKGROUNDS = ("#05121a", "#0b1f29", "#0f2733", "#0b1d25", DARK_SURFACE)
 
 @pytest.mark.parametrize("code", CODES)
 def test_accent_text_meets_aa_on_every_light_surface(code: str) -> None:
-    """The one place a brand colour is adjusted — and only in lightness."""
+    """The one place a brand color is adjusted — and only in lightness."""
     colour = entry(code).theme["--accent-text-light"]
     for background in LIGHT_BACKGROUNDS:
         assert contrast(colour, background) >= 4.5, (
@@ -275,19 +275,19 @@ def test_only_the_agency_with_a_brand_guide_is_brand_grade() -> None:
 def test_placeholders_do_not_pretend_to_be_a_palette() -> None:
     """No evidence should look like no evidence, not like a confident brand."""
     placeholders = [e for e in map(entry, CODES) if e.provenance == "generated"]
-    assert placeholders, "expected some states to have no colours available"
+    assert placeholders, "expected some states to have no colors available"
     for e in placeholders:
         assert e.brand_count <= 2, (
-            f"{e.code} invents {e.brand_count} colours it has no source for")
+            f"{e.code} invents {e.brand_count} colors it has no source for")
         assert "not" in e.caveat.lower()
 
 
 def test_scraping_actually_contributed_colours() -> None:
     """A silent scraper failure would leave every state on a placeholder."""
     scraped = [e for e in map(entry, CODES) if e.provenance == "scraped"]
-    assert len(scraped) >= 25, f"only {len(scraped)} states have scraped colours"
+    assert len(scraped) >= 25, f"only {len(scraped)} states have scraped colors"
     mean = sum(e.brand_count for e in scraped) / len(scraped)
-    assert mean >= 3.0, f"scraped agencies average only {mean:.1f} colours"
+    assert mean >= 3.0, f"scraped agencies average only {mean:.1f} colors"
 
 
 # -------------------------------------------------------------- distinctiveness
@@ -295,7 +295,7 @@ def test_scraping_actually_contributed_colours() -> None:
 def test_states_do_not_converge_on_a_shared_look() -> None:
     """The bug this suite exists for: filler making every state look alike.
 
-    A colour on many agencies is a framework default, not a brand. The scraper
+    A color on many agencies is a framework default, not a brand. The scraper
     drops those; this asserts the result, so a regression in that filter shows up
     here rather than as a vague sense that the states look samey.
     """
@@ -311,10 +311,10 @@ def test_states_do_not_converge_on_a_shared_look() -> None:
 
 
 def test_chrome_and_accent_differ_where_the_agency_has_the_colours() -> None:
-    """With three or more colours there is no excuse for a one-note interface."""
+    """With three or more colors there is no excuse for a one-note interface."""
     for e in map(entry, CODES):
         if e.brand_count >= 3:
             distinct = len(set(e.roles.values()))
             assert distinct >= 3, (
-                f"{e.code} has {e.brand_count} colours but uses only "
+                f"{e.code} has {e.brand_count} colors but uses only "
                 f"{distinct} across six roles")

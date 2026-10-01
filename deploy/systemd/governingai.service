@@ -25,6 +25,22 @@ Environment=HOST=127.0.0.1
 Environment=PORT=8765
 Environment=PYTHONUNBUFFERED=1
 
+# Secrets live in a file readable only by root, not in this unit — a unit file
+# is world-readable and ends up in version control. The dash means the service
+# still starts if the file is absent, in which case verification codes are shown
+# on screen instead of emailed and the interface says so.
+#
+#   sudo install -m 600 /dev/null /etc/governingai.env
+#   sudo nano /etc/governingai.env
+#     SMTP_HOST=smtp.sendgrid.net
+#     SMTP_PORT=587
+#     SMTP_USER=apikey
+#     SMTP_PASSWORD=SG.xxxxxxxx
+#     SMTP_FROM=no-reply@governingai.us
+#     SMTP_FROM_NAME=Governing AI
+#   sudo systemctl restart governingai
+EnvironmentFile=-/etc/governingai.env
+
 ExecStart=/opt/governingai/.venv/bin/python -m app.server
 
 Restart=always

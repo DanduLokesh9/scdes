@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How it works — Governing AI</title>
+<style>
+  /* 16:9, the standard presentation shape. One slide per page. */
+  @page { size: 338.7mm 190.5mm; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16pt/1.45 "Segoe UI", system-ui, sans-serif; color: #16242c; }
+
+  .slide {
+    width: 338.7mm; height: 190.5mm;
+    padding: 20mm 24mm;
+    page-break-after: always;
+    position: relative;
+    display: flex; flex-direction: column;
+    background: #ffffff;
+  }
+  .slide:last-child { page-break-after: auto; }
+
+  .eyebrow {
+    font-size: 11pt; letter-spacing: 2.4pt; text-transform: uppercase;
+    color: #1c7a43; font-weight: 700; margin: 0 0 6mm;
+  }
+  h1 { font-size: 40pt; line-height: 1.1; margin: 0 0 6mm; letter-spacing: -.6pt; }
+  h2 { font-size: 30pt; line-height: 1.15; margin: 0 0 7mm; letter-spacing: -.4pt; }
+  h3 { font-size: 19pt; margin: 0 0 3mm; }
+  p  { font-size: 16pt; margin: 0 0 5mm; max-width: 90%; }
+  .lead { font-size: 20pt; color: #37505a; max-width: 88%; }
+  .muted { color: #5b6e74; }
+  .small { font-size: 13pt; }
+
+  ul { margin: 0 0 5mm; padding-left: 9mm; }
+  li { font-size: 16.5pt; margin-bottom: 3.5mm; }
+  li b { color: #0d3b2e; }
+
+  code { font-family: Consolas, monospace; font-size: .88em;
+         background: #eef2f3; padding: 1pt 4pt; border-radius: 3pt; }
+
+  /* section dividers */
+  .divider { background: #12303c; color: #ffffff; justify-content: center; }
+  .divider .eyebrow { color: #7fd8a8; }
+  .divider h1 { font-size: 52pt; color: #ffffff; }
+  .divider p { color: #b9ccd3; font-size: 20pt; }
+
+  /* the two-column split */
+  .cols { display: flex; gap: 14mm; margin-top: 2mm; }
+  .col { flex: 1; }
+  .card {
+    border: 1.5pt solid #cfd9dc; border-radius: 4mm; padding: 7mm 8mm; height: 100%;
+  }
+  .card.accent { border-color: #1c7a43; background: #f4faf6; }
+  .card h3 { color: #12303c; }
+
+  /* stat row */
+  .stats { display: flex; gap: 12mm; margin: 4mm 0 0; }
+  .stat .n { font-size: 40pt; font-weight: 700; line-height: 1; color: #1c7a43; }
+  .stat .l { font-size: 13pt; color: #5b6e74; margin-top: 2mm; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14pt; }
+  th, td { text-align: left; padding: 3mm 4mm; border-bottom: .7pt solid #cfd9dc;
+           vertical-align: top; }
+  th { background: #eef2f3; font-size: 12.5pt; text-transform: uppercase;
+       letter-spacing: 1pt; color: #37505a; }
+
+  pre {
+    background: #12303c; color: #e8f0f2; border-radius: 3mm;
+    padding: 6mm 8mm; font: 13.5pt/1.7 Consolas, monospace; margin: 0;
+    white-space: pre-wrap;
+  }
+
+  .note {
+    border-left: 3.5pt solid #1c7a43; background: #f4faf6;
+    padding: 5mm 7mm; font-size: 15pt; margin-top: auto;
+  }
+  .note.warn { border-left-color: #8a6510; background: #fdf7ea; }
+  .note b { color: #0d3b2e; }
+
+  .pagenum {
+    position: absolute; bottom: 9mm; right: 24mm;
+    font-size: 11pt; color: #9aacb2;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ TITLE -->
+<section class="slide" style="justify-content:center">
+  <p class="eyebrow">AI Governance</p>
+  <h1>How it works</h1>
+  <p class="lead">The front end and the back end, in plain language.</p>
+  <p class="small muted" style="margin-top:10mm">
+    app.staging.governingai.us &nbsp;·&nbsp; August 2026
+  </p>
+</section>
+
+<!-- ============================================================ PROBLEM -->
+<section class="slide">
+  <p class="eyebrow">The problem</p>
+  <h2>An agency writes its AI rules down.<br>Then they sit in a binder.</h2>
+  <p class="lead">Several hundred pages: a framework, an operations manual,
+     fourteen appendices.</p>
+  <p class="lead">Somebody wants to build an AI tool. Which rules apply? What risk
+     band? Who approves it? Which forms?</p>
+  <div class="note">
+    <b>In practice nobody reads it.</b> The rules get applied from memory,
+    inconsistently — and the record of <i>why</i> a decision was made is a
+    scattering of emails.
+  </div>
+  <div class="pagenum">2</div>
+</section>
+
+<!-- ============================================================ WHAT IT IS -->
+<section class="slide">
+  <p class="eyebrow">What we built</p>
+  <h2>Software that reads the rules<br>and then runs them</h2>
+  <div class="cols" style="margin-top:6mm">
+    <div class="col"><div class="card">
+      <h3>It answers questions</h3>
+      <p class="small">"What triggers a Level 2 incident?" — with the exact section
+         cited. And it refuses questions the documents don't cover.</p>
+    </div></div>
+    <div class="col"><div class="card">
+      <h3>It scores risk</h3>
+      <p class="small">Using the agency's own six factors and weightings — and shows
+         what would change <i>before</i> anything is saved.</p>
+    </div></div>
+    <div class="col"><div class="card">
+      <h3>It keeps the record</h3>
+      <p class="small">Every action written down, including every refusal, in a
+         chain where tampering shows.</p>
+    </div></div>
+  </div>
+  <div class="note">
+    <b>Nothing about the rules is written into the code.</b> Point it at a
+    different agency's documents and it becomes that agency's application.
+  </div>
+  <div class="pagenum">3</div>
+</section>
+
+<!-- ============================================================ TWO HALVES -->
+<section class="slide">
+  <p class="eyebrow">The shape of it</p>
+  <h2>Two halves</h2>
+  <div class="cols" style="margin-top:4mm">
+    <div class="col"><div class="card accent">
+      <h3>Back end — the server</h3>
+      <p class="small">Reads the documents. Does all the thinking: risk scoring,
+         searching, permissions, record-keeping.</p>
+      <p class="small"><b>Python · 24 files · ~7,300 lines</b></p>
+    </div></div>
+    <div class="col"><div class="card accent">
+      <h3>Front end — the browser</h3>
+      <p class="small">Everything you see and click. Holds no rules of its own —
+         it asks the server for everything and draws the answer.</p>
+      <p class="small"><b>HTML, CSS, JavaScript · 8 files · ~3,000 lines</b></p>
+    </div></div>
+  </div>
+  <div class="note">
+    <b>Why the split matters.</b> All the judgement lives in one half. The browser
+    cannot decide a project is Low risk — it can only display what the server said.
+    Tampering with the page changes what <i>you</i> see and nothing about the record.
+  </div>
+  <div class="pagenum">4</div>
+</section>
+
+<!-- ============================================================ DIVIDER: BACK -->
+<section class="slide divider">
+  <p class="eyebrow">Part one</p>
+  <h1>The back end</h1>
+  <p>The half that reads, thinks, and remembers.</p>
+</section>
+
+<!-- ============================================================ BACK 1 -->
+<section class="slide">
+  <p class="eyebrow">Back end · reading</p>
+  <h2>Teaching software to read a spreadsheet</h2>
+  <p class="lead">A human sees "Project Name:" and a box to write in.
+     A computer sees two cells.</p>
+  <ul>
+    <li>The reader recognises <b>four shapes</b> these documents use over and over:
+        a form, a checklist, a table of weightings, a table of records.</li>
+    <li>Result: <b>1,068 individual fields</b> found across 14 workbooks — each one
+        knowing which file, sheet and cell it came from.</li>
+    <li>Appendix G literally says <code>[Select: Water / Land and Waste / Air]</code>.
+        The software reads that hint and builds a dropdown with exactly those
+        three options.</li>
+  </ul>
+  <div class="note">
+    <b>Nobody typed those options into the code.</b> Amend the appendix to add a
+    fourth programme, and the dropdown gains a fourth option. No developer needed.
+  </div>
+  <div class="pagenum">6</div>
+</section>
+
+<!-- ============================================================ BACK 2 -->
+<section class="slide">
+  <p class="eyebrow">Back end · thinking</p>
+  <h2>The risk calculation</h2>
+  <table>
+    <tr><th>Factor</th><th>Weight</th><th>What a "3" means</th></tr>
+    <tr><td>Regulatory impact</td><td>×1.5</td><td>Directly affects regulatory outcomes</td></tr>
+    <tr><td>Public-facing</td><td>×1.0</td><td>Directly affects public services</td></tr>
+    <tr><td>Data sensitivity</td><td>×1.5</td><td>Personal or enforcement data</td></tr>
+    <tr><td>Reversibility</td><td>×1.0</td><td>Hard to undo</td></tr>
+    <tr><td>Community impact</td><td>×1.5</td><td>Likely disproportionate impact</td></tr>
+    <tr><td>Federal programme</td><td>×1.5</td><td>Delegated federal programme</td></tr>
+  </table>
+  <p class="small muted" style="margin-top:4mm">
+    12 or below = <b>Low</b> · 13–17 = <b>Moderate</b> · 18+ = <b>High</b>
+    (out of 24). Two or more 3s forces High.
+  </p>
+  <div class="pagenum">7</div>
+</section>
+
+<!-- ============================================================ BACK 3 -->
+<section class="slide">
+  <p class="eyebrow">Back end · thinking</p>
+  <h2>The feature that sells it</h2>
+  <p class="lead">The risk calculation changes nothing. It takes numbers in and
+     gives an answer out — no saving, no side effects.</p>
+  <p class="lead">Which means the same code can safely be run against
+     <i>hypothetical</i> settings.</p>
+  <pre>If you move Data Sensitivity from ×1.5 to ×2.0:
+
+  → 2 projects move from Moderate to High
+  → a Council decision is newly required at Gate 2
+  → Appendix K becomes mandatory for both</pre>
+  <div class="note">
+    <b>Shown before anything is saved.</b> "Exploring changes nothing" becomes
+    structurally true, rather than a rule someone has to remember not to break.
+  </div>
+  <div class="pagenum">8</div>
+</section>
+
+<!-- ============================================================ BACK 4 -->
+<section class="slide">
+  <p class="eyebrow">Back end · honesty</p>
+  <h2>One gate, not fifty</h2>
+  <p class="lead">Every action that changes anything passes through a
+     <b>single function</b> that asks two questions: who are you, and what mode is
+     the agency in.</p>
+  <ul>
+    <li>It records its answer <b>either way</b> — permission granted and permission
+        refused both go into the log.</li>
+    <li>The test suite actively attacks it: it tries to make the chat assistant
+        edit settings, an operator move a risk weight, a what-if overwrite the real
+        budget. Each must be refused <i>and</i> the refusal logged.</li>
+  </ul>
+  <div class="note">
+    <b>Why one place.</b> If every screen checked permissions for itself, there
+    would be fifty chances to forget one.
+  </div>
+  <div class="pagenum">9</div>
+</section>
+
+<!-- ============================================================ BACK 5 -->
+<section class="slide">
+  <p class="eyebrow">Back end · honesty</p>
+  <h2>The audit trail</h2>
+  <p class="lead">Every entry carries a fingerprint of the entry before it.</p>
+  <p class="lead"><b>Like a ledger</b> where each page prints a summary code of the
+     previous page. Tear out page 40 and page 41 no longer matches page 39 — the
+     gap is obvious even though the page is gone.</p>
+  <div class="note warn">
+    <b>What it does not do.</b> It is tamper-<i>evident</i>, not
+    tamper-<i>proof</i>. Someone with file access could rewrite the whole chain
+    from the beginning and it would verify cleanly. Closing that needs a
+    write-once store or digital signatures. We are saying so rather than letting
+    it be assumed.
+  </div>
+  <div class="pagenum">10</div>
+</section>
+
+<!-- ============================================================ BACK 6 -->
+<section class="slide">
+  <p class="eyebrow">Back end · storage</p>
+  <h2>No database. Ordinary files.</h2>
+  <table>
+    <tr><th>What</th><th>Where</th><th>Size</th></tr>
+    <tr><td>The adopted documents</td><td>Word and Excel, untouched</td><td>440 KB</td></tr>
+    <tr><td>Tuned settings</td><td>Plain text config files</td><td>21 KB</td></tr>
+    <tr><td>Audit trail</td><td>One record per line</td><td>64 KB</td></tr>
+    <tr><td>Council decisions</td><td>One record per line</td><td>25 KB</td></tr>
+    <tr><td>Search index</td><td>Rebuilt automatically</td><td>785 KB</td></tr>
+  </table>
+  <div class="note">
+    <b>Deliberate.</b> A governance record has to be readable years from now.
+    Every file here can be opened and understood <i>without this software</i>.
+  </div>
+  <div class="pagenum">11</div>
+</section>
+
+<!-- ============================================================ DIVIDER: FRONT -->
+<section class="slide divider">
+  <p class="eyebrow">Part two</p>
+  <h1>The front end</h1>
+  <p>The half you see, click and read.</p>
+</section>
+
+<!-- ============================================================ FRONT 1 -->
+<section class="slide">
+  <p class="eyebrow">Front end · the idea</p>
+  <h2>The record, and the reason</h2>
+  <div class="cols" style="margin-top:4mm">
+    <div class="col"><div class="card">
+      <h3>Left</h3>
+      <p class="small">The sections. Operating, Authoring, Assurance — grouped by
+         what you are there to do.</p>
+    </div></div>
+    <div class="col"><div class="card accent">
+      <h3>Centre</h3>
+      <p class="small">The record. What the governed documents say. Every number
+         traces to a source.</p>
+    </div></div>
+    <div class="col"><div class="card">
+      <h3>Right</h3>
+      <p class="small">Always <i>why</i> — the rule behind what's on the left, with
+         the section it cites.</p>
+    </div></div>
+  </div>
+  <div class="note">
+    <b>Explainability is part of the frame</b>, not a panel you go looking for.
+    For a governance trail, being able to see why something says what it says is
+    the entire point.
+  </div>
+  <div class="pagenum">13</div>
+</section>
+
+<!-- ============================================================ FRONT 2 -->
+<section class="slide">
+  <p class="eyebrow">Front end · the journey</p>
+  <h2>What a new user walks through</h2>
+  <pre>1.  Which are you?          government / non-profit, or business
+2.  Register your email     .gov / .org / .us and similar
+3.  The map                 pick a state from a real US map
+4.  Sign in                 who is acting, and with what authority
+5.  The application         the record, and the reason</pre>
+  <p class="lead" style="margin-top:6mm">The business portal is shown but marked
+     <b>coming soon</b> — the disclosure and procurement obligations differ enough
+     to need their own path rather than a relabelled one.</p>
+  <div class="pagenum">14</div>
+</section>
+
+<!-- ============================================================ FRONT 3 -->
+<section class="slide">
+  <p class="eyebrow">Front end · the map</p>
+  <h2>A real map, with the flag set into it</h2>
+  <div class="stats">
+    <div class="stat"><div class="n">51</div><div class="l">agencies</div></div>
+    <div class="stat"><div class="n">51</div><div class="l">genuine state flags</div></div>
+    <div class="stat"><div class="n">0</div><div class="l">internet calls</div></div>
+  </div>
+  <ul style="margin-top:6mm">
+    <li><b>Real geography</b> — US Census boundary data, the standard projection for
+        the continental US, Alaska and Hawaii as insets.</li>
+    <li><b>The real flag</b> — official Old Glory Red and Blue, correct proportions,
+        fifty five-pointed stars.</li>
+    <li><b>Built once, offline.</b> No mapping service, no account, no internet.</li>
+  </ul>
+  <div class="pagenum">15</div>
+</section>
+
+<!-- ============================================================ FRONT 4 -->
+<section class="slide">
+  <p class="eyebrow">Front end · theming</p>
+  <h2>Each agency's own colours</h2>
+  <p class="lead">Pick a state and the whole interface takes on that agency's
+     identity — harvested from its live public website.</p>
+  <div class="cols" style="margin-top:2mm">
+    <div class="col"><div class="card">
+      <h3>What went wrong first</h3>
+      <p class="small">Every agency was forced into a fixed set of eight colours,
+         with the gaps generated. Each looked fine alone — but the filler followed
+         the same recipe every time, so all fifty states drifted toward looking
+         identical.</p>
+    </div></div>
+    <div class="col"><div class="card accent">
+      <h3>What it does now</h3>
+      <p class="small">However many colours an agency actually has — 2 to 19 —
+         and no padding. A three-colour agency is themed in exactly its three.</p>
+    </div></div>
+  </div>
+  <div class="note warn">
+    <b>Risk colours never change.</b> Low green, Moderate amber, High red — in all
+    fifty states. A record where "High risk" is maroon in one state and olive in
+    the next invites misreading.
+  </div>
+  <div class="pagenum">16</div>
+</section>
+
+<!-- ============================================================ FRONT 5 -->
+<section class="slide">
+  <p class="eyebrow">Front end · files</p>
+  <h2>What's actually in the browser</h2>
+  <table>
+    <tr><th>File</th><th>What it does</th><th>Lines</th></tr>
+    <tr><td><code>app.js</code></td><td>Draws every screen by asking the server for data</td><td>931</td></tr>
+    <tr><td><code>launcher.js</code></td><td>The map, the flags, the colours, the sign-in</td><td>596</td></tr>
+    <tr><td><code>app.css</code> + <code>launcher.css</code></td><td>Layout and appearance</td><td>848</td></tr>
+    <tr><td><code>tour.js</code></td><td>The guided walkthrough</td><td>199</td></tr>
+    <tr><td><code>onboard.js</code></td><td>The portal choice and email registration</td><td>164</td></tr>
+    <tr><td><code>index.html</code></td><td>The page skeleton — empty boxes to fill</td><td>129</td></tr>
+    <tr><td><code>tokens.css</code></td><td>Every colour in the app resolves through this one file</td><td>118</td></tr>
+  </table>
+  <p class="small muted" style="margin-top:3mm">
+    Plain JavaScript. No React, Vue or Angular.
+  </p>
+  <div class="pagenum">17</div>
+</section>
+
+<!-- ============================================================ HOW THEY TALK -->
+<section class="slide">
+  <p class="eyebrow">Putting it together</p>
+  <h2>What happens when you click "Registry"</h2>
+  <pre>1. Browser      asks the server for the project register
+2. Server       works out who is asking
+3. Permission   may this person see it?          yes
+4. Data         reads the project records from disk
+5. Thinking     works out each project's risk band
+6. Wording      labels them in the agency's own terms
+7. Answer       sends back a plain data message
+8. Drawing      the browser turns it into the table you see</pre>
+  <div class="note">
+    <b>Steps 3 to 6 are all on the server.</b> The browser receives finished
+    answers — never the rules that produced them.
+  </div>
+  <div class="pagenum">18</div>
+</section>
+
+<!-- ============================================================ BUILT ON -->
+<section class="slide">
+  <p class="eyebrow">What it's built on</p>
+  <h2>Deliberately very few moving parts</h2>
+  <div class="stats" style="margin-bottom:6mm">
+    <div class="stat"><div class="n">3</div><div class="l">outside libraries</div></div>
+    <div class="stat"><div class="n">0</div><div class="l">databases</div></div>
+    <div class="stat"><div class="n">0</div><div class="l">internet required</div></div>
+    <div class="stat"><div class="n">794</div><div class="l">automated tests</div></div>
+  </div>
+  <p class="lead">The three libraries are all for reading documents: Excel, Word,
+     and settings files. The web server is Python's own.</p>
+  <div class="note">
+    <b>Why so few.</b> Every framework added is something that must be kept updated
+    for as long as the record must be readable — and a governance record outlives
+    most frameworks. This can be picked up in five years and still run.
+  </div>
+  <div class="pagenum">19</div>
+</section>
+
+<!-- ============================================================ HONEST -->
+<section class="slide">
+  <p class="eyebrow">Being straight about it</p>
+  <h2>What is real, and what is not</h2>
+  <div class="cols">
+    <div class="col"><div class="card accent">
+      <h3>Real</h3>
+      <ul style="padding-left:6mm">
+        <li class="small">The adopted SCDES documents, parsed</li>
+        <li class="small">The risk weights, read from Appendix B</li>
+        <li class="small">The integrity findings — 1 critical, 2 serious, 10 moderate</li>
+        <li class="small">The map geography and the state flags</li>
+      </ul>
+    </div></div>
+    <div class="col"><div class="card">
+      <h3>Not confirmed</h3>
+      <ul style="padding-left:6mm">
+        <li class="small"><b>No agency has approved the scraped colours</b></li>
+        <li class="small">Agency names are seeded and marked unverified</li>
+        <li class="small">Budget weights and roadmap costs are placeholders</li>
+        <li class="small">Only one agency's documents load at a time</li>
+      </ul>
+    </div></div>
+  </div>
+  <div class="note warn">
+    <b>Before this URL is shared:</b> there is no log-in security yet. Anyone with
+    the address can currently act as the Council.
+  </div>
+  <div class="pagenum">20</div>
+</section>
+
+<!-- ============================================================ CLOSE -->
+<section class="slide" style="justify-content:center">
+  <p class="eyebrow">In short</p>
+  <h1>The binder, running.</h1>
+  <p class="lead" style="max-width:78%">The rules answer questions about themselves,
+     score the work, and keep their own record — and every figure on every screen
+     traces back to a document somebody signed.</p>
+  <p class="small muted" style="margin-top:10mm">
+    app.staging.governingai.us
+  </p>
+</section>
+
+</body>
+</html>

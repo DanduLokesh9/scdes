@@ -1,0 +1,15 @@
+
+# Nothing here is for a search engine.
+#
+# This host serves a staging build of a product agencies use to draft their AI
+# governance frameworks. Those drafts are theirs, they are unfinished, and the
+# whole premise of the product is that no agency's content is visible to
+# anybody else. A crawler indexing this host would put a client's draft into a
+# search result, which is the same leak by a route nobody was watching.
+#
+# The `noindex` meta in index.html is the belt to this brace: a crawler that
+# ignores this file still sees the meta, and one that never fetches the page
+# still sees this.
+
+User-agent: *
+Disallow: /

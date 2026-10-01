@@ -370,12 +370,12 @@ PERMITPRO = Project(
         "federal_program_nexus": 3,    # CWA / NPDES delegated program
     },
     typical_classification="Moderate",
-    data_sources="Submission records, backlog snapshots, permit-type catalogue, statutory-deadline flags",
+    data_sources="Submission records, backlog snapshots, permit-type catalog, statutory-deadline flags",
     federal_nexus="CWA / NPDES",
     regulatory_constraints=(
         "Advisory triage only; must not constitute a permit decision. "
         "Processing-time data is right-censored (completed-only) — the backlog "
-        "is invisible to the speed data, so ranking on it under-prioritises "
+        "is invisible to the speed data, so ranking on it under-prioritizes "
         "stuck cases."
     ),
     capabilities_required=["data_governance", "mcp_api_access"],

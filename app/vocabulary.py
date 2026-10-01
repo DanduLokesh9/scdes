@@ -35,7 +35,7 @@ VOCABULARY_FILE = CORPUS / "config" / "vocabulary.yaml"
 CONCEPTS = {
     "use_case_grouping": {
         "keys": ["1", "2", "3"],
-        "governs": "How authorised use cases are grouped and sequenced. The "
+        "governs": "How authorized use cases are grouped and sequenced. The "
                    "grouping drives the capacity ladder and which screening "
                    "applies.",
         "citation": "SCDES AI Governance Framework §5 (Authorized Use Case Structure)",

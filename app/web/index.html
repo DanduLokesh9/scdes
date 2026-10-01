@@ -3,9 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SCDES AI Governance</title>
+<!-- Neutral until an agency is known — `launcher.js` sets it to their own
+     abbreviation once one is. This said "SCDES AI Governance", which is the
+     one thing the client has drawn a hard line against and it was in the
+     browser tab of every person who had not signed in yet, in every bookmark
+     of the landing page, and in every screenshot anybody took of it. The
+     isolation tests read the page body and never the document title. -->
+<title>AI Governance</title>
+<!-- Staging answers on the public internet, so it must not be indexed. A
+     client's draft framework turning up in a search result would breach the
+     privacy this product is built to help agencies write down. -->
+<meta name="robots" content="noindex, nofollow, noarchive">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <script>
-/* Resolve the colour mode before the first paint, so there is no flash of the
+/* Resolve the color mode before the first paint, so there is no flash of the
    wrong theme. Explicit choice wins; otherwise follow the operating system. */
 (function () {
   var saved = null;
@@ -19,8 +30,20 @@
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/launcher.css">
 </head>
-<body>
-<!-- Onboarding sits above the map: which kind of organisation, then an email,
+<!-- `booting` until the shell has its state. Removed at the end of the boot
+     sequence in app.js, and deliberately NOT removed if that sequence fails.
+
+     Without it the record rendered immediately, fully interactive, while four
+     requests were still in flight — five seconds of a live sidebar with every
+     paid section clickable and the NDA not yet consulted, because the code that
+     locks them had not run. A gate that is open until something closes it is
+     not a gate. -->
+<body class="booting">
+<div class="booting-veil" aria-live="polite">
+  <div class="booting-mark">Governing AI</div>
+  <div class="booting-note">Loading your agency…</div>
+</div>
+<!-- Onboarding sits above the map: which kind of organization, then an email,
      and only then the agency picker. -->
 <div class="onboard" id="onboard" hidden></div>
 <div class="launcher" id="launcher" hidden></div>
@@ -32,7 +55,7 @@
     <!-- Both filled from the selected agency by launcher.js; the markup values
          are only what shows before the registry has loaded. -->
     <span class="tb-name">
-      <b id="agencyShort">SCDES</b><small>AI Governance</small>
+      <b id="agencyShort">—</b><small>AI Governance</small>
     </span>
   </div>
 
@@ -43,8 +66,22 @@
   </button>
 
   <div class="tb-right">
-    <button class="tb-chip tour-chip" id="tourChip" type="button"
-      title="Take a guided tour of the application">? Guide</button>
+    <!-- The beta notice, reopened. It appears by itself once each time
+         somebody signs in; this is for reading it again. Always present,
+         because the product is a beta for everybody, not only for the people
+         who happened to read the notice. -->
+    <button class="tb-chip beta-chip" id="betaChip" type="button"
+      aria-label="Beta — read the notice about this early version">Beta</button>
+    <!-- Shown only for a tester bypass. A session with the gates open must be
+         obviously different from a real one, in screenshots and demos alike. -->
+    <span class="tb-chip tester-chip" id="testerChip" hidden
+      title="Approval was skipped for this address. Not how a real registration behaves.">
+      ⚑ TESTER</span>
+    <!-- Voice navigation. Hidden entirely where the browser cannot do it, and
+         dimmed until switched on, so it never looks like something that ought
+         to be working and is not. -->
+    <button class="tb-chip voice-chip off" id="voiceChip" type="button" hidden
+      title="Voice navigation">🎙 Voice</button>
     <button class="tb-chip mode-chip" id="modeToggle" type="button"
       aria-pressed="false"></button>
     <button class="tb-chip" id="modeChip" type="button" data-view="council"></button>
@@ -52,44 +89,132 @@
     <div class="tb-user">
       <span class="ava" id="avatar">–</span>
       <select id="userPick" aria-label="Signed in as"></select>
+      <!-- There was no way out. Someone demonstrating this to their leadership
+           had to clear browser storage by hand to hand the laptop over, which
+           is not a thing anyone should have to know how to do. -->
+      <button class="tb-chip signout-chip" id="signOut" type="button"
+        title="Sign out of this browser">Sign out</button>
     </div>
   </div>
 </header>
 
-<div class="spine" id="spine" hidden>
-  <button class="spine-proj" id="spineProj" type="button">
-    <b id="projName">—</b><span id="projMeta"></span>
-  </button>
-  <ol class="spine-track" id="spineTrack" aria-label="Lifecycle gates"></ol>
-</div>
+<!-- The six-gate spine strip stood here and was retired with the Workflow
+     Helper it navigated. It rendered Concept · Readiness · Pilot ·
+     Deployment · Scaling · Annual review as numbered links across the top
+     of every screen, for the one agency whose corpus was loaded.
+
+     The seven-gate tracker replaces it, and sits on the project it belongs
+     to rather than across the whole application — a strip claiming to show
+     where "the project" is, on a screen about something else, was only ever
+     right when exactly one project existed. -->
 
 <div class="shell">
   <nav class="rail" aria-label="Sections">
-    <button class="rail-item rail-launch" id="railLaunch" type="button">
-      <i>🗺</i>Choose agency<span class="tag">MAP</span></button>
+    <!-- The framework comes first because everything else is read out of it.
+         There is no agency switcher: the agency is chosen once at onboarding and
+         is not something to flick between mid-session. -->
+    <!-- Authoring first: building the framework is the whole job until it is
+         done, and per the client it is the ONLY free offering. The playbook,
+         the appendices and all downstream workflow management are a paid
+         addition. They are greyed rather than hidden so you can see what the
+         work leads to — but finishing the framework does not unlock them, and
+         the wording must not imply that it will. -->
+    <!-- One item, not four.
 
-    <p class="rail-eyebrow">Operating</p>
-    <button class="rail-item" data-view="vision"><i>◆</i>Vision</button>
-    <button class="rail-item" data-view="registry"><i>▤</i>Registry</button>
-    <button class="rail-item" data-view="workflow"><i>⇢</i>Lifecycle</button>
-    <button class="rail-item" data-view="budget"><i>▮</i>Budget</button>
-    <button class="rail-item" data-view="oversight"><i>◈</i>Oversight</button>
-    <button class="rail-item" data-view="process"><i>§</i>Process</button>
+         Terminology, Configure and who-decides were rail destinations, which
+         made them things to go and do rather than steps in a process. They are
+         decisions the framework itself asks for — early ones, because the rest
+         reads from them — so they belong inside the builder in the order they
+         are needed, not in a sidebar to be visited in any order or skipped.
 
-    <p class="rail-eyebrow">Authoring</p>
-    <button class="rail-item" data-view="setup"><i>⚙</i>Terminology<span class="tag">OT</span></button>
-    <button class="rail-item" data-view="configure"><i>◎</i>Configure<span class="tag">OT</span></button>
-    <button class="rail-item" data-view="council"><i>⚖</i>Council<span class="tag">GATED</span></button>
-
-    <p class="rail-eyebrow">Assurance</p>
+         They are still reachable at #setup / #configure / #council for anyone
+         who wants to jump straight to one; they are just not advertised as
+         somewhere to start. -->
+    <p class="rail-eyebrow">Authoring <span class="rail-badge free">free</span></p>
+    <button class="rail-item rail-framework" data-view="framework">
+      <i>◈</i>Framework<span class="tag" id="fwTag">—</span></button>
+    <!-- Free, and it was sitting under a heading that said subscription while
+         rendering enabled — the one live row in a block of gray ones, which
+         reads as a fault rather than as an exception. It describes the agency's
+         own corpus, so it belongs with the authoring work. -->
     <button class="rail-item" data-view="agency"><i>◱</i>Agency profile</button>
-    <button class="rail-item" data-view="integrity"><i>✓</i>Integrity</button>
-    <button class="rail-item" data-view="audit"><i>⛓</i>Audit trail</button>
+
+    <!-- Nine locked rows across two headings was a lot of gray to leave
+         unexplained. One heading, one sentence, and the rooms still listed so
+         the offer is visible rather than hidden. -->
+    <p class="rail-eyebrow">With a subscription
+      <span class="rail-badge">upgrade</span></p>
+    <!-- Directly under the heading that says "upgrade", above the ten rooms
+         it unlocks. Not marked data-paid: a screen that sells the paid
+         modules cannot itself be one of them, and somebody has to be able to
+         buy before they have anything.
+
+         It was last, after the note. On a 1440x720 window — an ordinary
+         laptop — the rail has to scroll and this was the one item that fell
+         below the fold, so the page that sells the product was the only one
+         you could not see. Measured, not guessed: tools/check_overflow.js.
+         Reading order is better this way too — the heading says upgrade, and
+         the next thing is how. -->
+    <button class="rail-item rail-buy" data-view="billing"><i>◷</i>Subscription</button>
+    <!-- In the order people work, chosen by the team on Sep 30 2026: set
+         the goals, see what you already have (tools, then data, then who you
+         buy from), start a project and follow its steps, get it approved and
+         paid for, then watch it. Data was first until then, on the client's
+         "Data warehouse module is the foundation on which all deployments
+         rest"; it is still third, ahead of everything that depends on it.
+
+         Projects is not marked data-paid (see `api_projects`), and nor are
+         Lifecycle and Audit trail. Lifecycle is the reference page for the
+         seven steps; it holds no record and writes nothing, so it can never
+         be behind a locked door. The Workflow Helper that once stood here
+         numbered its gates, which the lifecycle spine forbids — see the note
+         above `api_config` in app/server.py. -->
+    <button class="rail-item" data-view="vision" data-paid="1"><i>◆</i>Vision</button>
+    <button class="rail-item" data-view="registry" data-paid="1"><i>▤</i>Registry</button>
+    <button class="rail-item" data-view="holdings" data-paid="1"><i>▦</i>Data</button>
+    <button class="rail-item" data-view="vendors" data-paid="1"><i>◫</i>Vendors</button>
+    <button class="rail-item" data-view="projects"><i>▥</i>Projects</button>
+    <button class="rail-item" data-view="lifecycle"><i>◌</i>Lifecycle</button>
+    <button class="rail-item" data-view="process" data-paid="1"><i>§</i>Process</button>
+    <button class="rail-item" data-view="budget" data-paid="1"><i>▮</i>Budget</button>
+    <button class="rail-item" data-view="oversight" data-paid="1"><i>◈</i>Oversight</button>
+    <button class="rail-item" data-view="integrity" data-paid="1"><i>✓</i>Integrity</button>
+    <button class="rail-item" data-view="audit"><i>⛓</i>History</button>
+    <!-- One line. It was three, and on a short window those three lines were
+         what pushed a navigation item off the bottom of the rail. The
+         Subscription page above says all of it properly — what the modules
+         are, what they cost, and that the framework is not among them — so
+         repeating it here in small gray type bought nothing and cost a row
+         of navigation. -->
+    <p class="rail-note">Your framework is free and stays yours.</p>
+
+    <!-- Running GAIUS, not governing an agency. Hidden for everyone else and
+         empty until the server says otherwise — the reports here come from
+         every agency, so this is the one section that deliberately crosses the
+         boundary the rest of the application never does. The server checks the
+         same thing again on every request; this attribute only decides whether
+         the heading is drawn. -->
+    <div id="adminRail" hidden>
+      <p class="rail-eyebrow">Admin <span class="rail-badge">GAIUS team</span></p>
+      <button class="rail-item" data-view="bugs"><i>⚑</i>Reported bugs</button>
+      <button class="rail-item" data-view="usage"><i>◔</i>Usage</button>
+      <!-- The GAIUS team's half of the invoice route: every organization's
+           orders, and the one place an invoice can be marked paid. Checked on
+           the proven address server-side, like the two above. -->
+      <button class="rail-item" data-view="subscriptions"><i>◷</i>Subscriptions</button>
+      <!-- Appointing every organization's admins, and clearing sign-ups that
+           never finished. People only; checked server-side like the rest. -->
+      <button class="rail-item" data-view="organizations"><i>⚇</i>Organizations</button>
+    </div>
   </nav>
 
   <main class="record" id="record">
     <div class="rec-head">
-      <p class="crumb" id="agencyCrumb">South Carolina Department of Environmental Services</p>
+      <!-- Blank until an agency is known. Hardcoding SCDES here meant anyone
+           who registered with a different agency saw SCDES's name above every
+           screen until something overwrote it, and on most screens nothing
+           ever did. -->
+      <p class="crumb" id="agencyCrumb"></p>
       <h1 id="viewTitle">Vision</h1>
       <p class="lede" id="viewSub"></p>
     </div>
@@ -127,17 +252,32 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!-- The 60-second welcome. Shown once, before anything else, because the one
+     thing a new user must understand is that the framework comes first. -->
+<div class="welcome" id="welcome" hidden></div>
+
 <!-- Guided tour: a spotlight over the real interface rather than a video or a
      screenshot, so what is being explained is the thing in front of you. -->
 <div class="tour" id="tour" hidden>
   <div class="tour-mask" id="tourMask"></div>
-  <div class="tour-card" id="tourCard" role="dialog" aria-modal="true"
-       aria-labelledby="tourTitle"></div>
 </div>
+<!-- The card is a sibling of #tour, not a child, and deliberately so. #tour
+     creates a stacking context, which traps its children's z-index inside it —
+     and the spotlit element is lifted above #tour to escape the dark mask, so it
+     painted over the card. At the top level the card can sit above both. -->
+<div class="tour-card" id="tourCard" role="dialog" aria-modal="true"
+     aria-labelledby="tourTitle" hidden></div>
 
 <script src="/assets/onboard.js"></script>
+<script src="/assets/welcome.js"></script>
 <script src="/assets/launcher.js"></script>
 <script src="/assets/tour.js"></script>
+<script src="/assets/bugs.js"></script>
+<script src="/assets/dock.js"></script>
+<script src="/assets/guide.js"></script>
+<script src="/assets/notify.js"></script>
+<script src="/assets/speech.js"></script>
+<script src="/assets/builder.js"></script>
 <script src="/assets/app.js"></script>
 </body>
 </html>

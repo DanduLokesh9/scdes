@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deployment Runbook — Governing AI staging</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font: 10.5pt/1.55 "Segoe UI", system-ui, sans-serif;
+    color: #16242c; margin: 0;
+  }
+  h1 { font-size: 21pt; margin: 0 0 4pt; letter-spacing: -.3pt; }
+  .sub { color: #5b6e74; font-size: 10pt; margin: 0 0 16pt; }
+  h2 {
+    font-size: 13pt; margin: 20pt 0 7pt; padding-bottom: 3pt;
+    border-bottom: 1.5pt solid #16242c;
+  }
+  h3 { font-size: 11pt; margin: 13pt 0 4pt; }
+  p { margin: 0 0 7pt; }
+  code, pre { font-family: Consolas, "Courier New", monospace; }
+  code { background: #eef2f3; padding: 1pt 3pt; border-radius: 2pt; font-size: 9.5pt; }
+  pre {
+    background: #14232b; color: #e8f0f2; padding: 8pt 10pt; border-radius: 4pt;
+    font-size: 9pt; line-height: 1.45; overflow-wrap: break-word;
+    white-space: pre-wrap; margin: 5pt 0 9pt;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt; font-size: 9.5pt; }
+  th, td { text-align: left; padding: 4pt 7pt; border-bottom: .6pt solid #cfd9dc; vertical-align: top; }
+  th { background: #eef2f3; font-weight: 600; }
+  .step {
+    background: #f6f9fa; border-left: 3pt solid #1c7a43;
+    padding: 7pt 11pt; margin: 9pt 0; page-break-inside: avoid;
+  }
+  .step h3 { margin-top: 0; }
+  .warn { background: #fdf6e7; border-left: 3pt solid #8a6510; padding: 7pt 11pt; margin: 9pt 0; }
+  .stop { background: #fdeceb; border-left: 3pt solid #b3261e; padding: 7pt 11pt; margin: 9pt 0; }
+  .ok   { background: #edf7f1; border-left: 3pt solid #1c7a43; padding: 7pt 11pt; margin: 9pt 0; }
+  .muted { color: #5b6e74; font-size: 9.5pt; }
+  ul, ol { margin: 0 0 8pt; padding-left: 18pt; }
+  li { margin-bottom: 3pt; }
+  .kv { font-size: 9.5pt; }
+  .kv td:first-child { color: #5b6e74; width: 34%; }
+  footer { margin-top: 22pt; padding-top: 7pt; border-top: .6pt solid #cfd9dc; }
+</style>
+</head>
+<body>
+
+<h1>Deployment Runbook</h1>
+<p class="sub">Governing AI — AI Governance application · staging on AWS EC2<br>
+Completed 14 August 2026 · <strong>https://app.staging.governingai.us</strong></p>
+
+<div class="ok">
+  <strong>Outcome.</strong> The application is live over HTTPS, runs as a managed
+  service that restarts on crash and starts on boot, and its 794 automated tests
+  pass on the server itself. Two infrastructure faults were found and fixed on
+  the way; both are documented below because they are the parts most likely to
+  recur.
+</div>
+
+<h2>1. What was deployed</h2>
+
+<table class="kv">
+  <tr><td>Application</td><td>AI Governance app — Python 3.11+, standard-library HTTP server (not Flask/Django/FastAPI)</td></tr>
+  <tr><td>Dependencies</td><td>openpyxl, python-docx, PyYAML — three packages, all for reading the adopted documents</td></tr>
+  <tr><td>Database</td><td>None. State is files: hash-chained audit log, filled appendix workbooks, registrations</td></tr>
+  <tr><td>Source</td><td><code>github.com/DanduLokesh9/scdes</code>, branch <code>develop</code> (private repository)</td></tr>
+  <tr><td>Server</td><td>EC2 <code>i-0a8d06f88ec69f8be</code> — t3.large, Ubuntu 24.04, us-east-1d</td></tr>
+  <tr><td>Address</td><td>Elastic IP 107.21.44.130 · DNS <code>app.staging.governingai.us</code> (GoDaddy A record, TTL 600)</td></tr>
+  <tr><td>Installed at</td><td><code>/opt/governingai</code>, owned by <code>ubuntu</code></td></tr>
+</table>
+
+<p><strong>Architecture:</strong> nginx listens publicly on 80/443 and proxies to
+the application on <code>127.0.0.1:8765</code>. The app binds to localhost only,
+deliberately — see §7.</p>
+
+<h2>2. Pre-flight checks (from the local Windows laptop)</h2>
+
+<div class="step">
+  <h3>Step 1 — Confirm the SSH key and client</h3>
+<pre>Get-ChildItem "C:\Users\dandu\Downloads\*.pem"
+ssh -V</pre>
+  <p class="muted">Found <code>govern.pem</code> (1674 bytes). OpenSSH 9.5p2 present.
+  Later confirmed against the console: the instance's <em>Key name</em> is
+  <code>govern</code>, so this was the right key.</p>
+</div>
+
+<div class="step">
+  <h3>Step 2 — Restrict the key's permissions</h3>
+<pre>icacls "C:\Users\dandu\Downloads\govern.pem" /inheritance:r /grant:r "$env:USERNAME:(R)"</pre>
+  <p class="muted">SSH refuses to use a private key that other accounts can read.
+  A freshly downloaded <code>.pem</code> inherits broad permissions, so this is
+  required before the first connection, not optional hygiene.</p>
+</div>
+
+<div class="step">
+  <h3>Step 3 — Confirm DNS resolves</h3>
+<pre>Resolve-DnsName app.staging.governingai.us -Type A</pre>
+  <p class="muted">Returned 107.21.44.130. The GoDaddy A record was correct
+  throughout and never needed changing.</p>
+</div>
+
+<div class="step">
+  <h3>Step 4 — Test the ports</h3>
+<pre>$c = New-Object System.Net.Sockets.TcpClient
+$c.ConnectAsync("107.21.44.130", 22).Wait(6000)</pre>
+  <p class="muted">All three ports (22, 80, 443) <strong>timed out</strong>. A
+  control test against <code>github.com:443</code> succeeded, proving the fault
+  was at the server end rather than local networking.</p>
+</div>
+
+<div class="warn">
+  <strong>Reading the failure mode matters here.</strong> A <em>timeout</em> means
+  packets are being silently dropped — a firewall or a dead address. A
+  <em>connection refused</em> would instead mean the host is reachable but nothing
+  is listening on that port. The two point at completely different causes, and
+  distinguishing them saves a great deal of guessing.
+</div>
+
+<h2>3. Fault 1 — Elastic IP not associated</h2>
+
+<p>The security group (<code>hazmit-staging-sg</code>, inherited from an earlier
+project) was checked first and turned out to <em>already</em> allow SSH from
+<code>0.0.0.0/0</code>. So the security group was not the cause.</p>
+
+<p>The real cause: the instance had been relaunched, and <strong>a newly launched
+instance does not inherit an Elastic IP</strong>. The address 107.21.44.130 was
+pointing at nothing.</p>
+
+<div class="step">
+  <h3>Fix</h3>
+  <p>Console → <strong>EC2</strong> → <strong>Elastic IPs</strong> → select
+  <code>107.21.44.130</code> → <strong>Actions</strong> →
+  <strong>Associate Elastic IP address</strong> → choose the instance →
+  <strong>Associate</strong>.</p>
+  <p class="muted">Port 22 answered on the first probe afterwards.</p>
+</div>
+
+<p><strong>Also added</strong> to the security group for later use:</p>
+<table>
+  <tr><th>Type</th><th>Port</th><th>Source</th><th>Purpose</th></tr>
+  <tr><td>SSH</td><td>22</td><td>your IP <code>/32</code> (or <code>0.0.0.0/0</code>)</td><td>administration</td></tr>
+  <tr><td>HTTP</td><td>80</td><td><code>0.0.0.0/0</code></td><td>public site, and Certbot's challenge</td></tr>
+  <tr><td>HTTPS</td><td>443</td><td><code>0.0.0.0/0</code></td><td>public site over TLS</td></tr>
+</table>
+<p class="muted">Note this security group is shared with another instance, so
+opening 80/443 opens them there too. A dedicated group avoids that spillover.</p>
+
+<h2>4. Fault 2 — no IAM role, so Session Manager could not connect</h2>
+
+<p>Two browser-based connection methods were tried before SSH:</p>
+<ul>
+  <li><strong>EC2 Instance Connect</strong> — failed with
+  <em>"Error establishing SSH connection"</em>. Usually the IAM user lacks
+  <code>ec2-instance-connect:SendSSHPublicKey</code>.</li>
+  <li><strong>Session Manager</strong> — the Connect page reported
+  <em>IAM role: –</em> and, in its own diagnostics,
+  <em>"SSM Agent unable to acquire credentials … instance management role is not
+  configured"</em>.</li>
+</ul>
+
+<p>Session Manager authenticates through IAM, so it requires an instance role.
+None was attached.</p>
+
+<div class="step">
+  <h3>Fix</h3>
+  <ol>
+    <li>EC2 → tick the instance → <strong>Actions</strong> →
+    <strong>Security</strong> → <strong>Modify IAM role</strong></li>
+    <li><strong>Create new IAM role</strong> → trusted entity
+    <strong>AWS service</strong>, use case <strong>EC2</strong></li>
+    <li>Attach <code>AmazonSSMManagedInstanceCore</code>
+    (<code>CloudWatchAgentServerPolicy</code> is a harmless extra) — no custom
+    policy needed</li>
+    <li>Name it <code>instanceRole</code> → <strong>Create role</strong></li>
+    <li>Back on <em>Modify IAM role</em> → refresh → select it →
+    <strong>Update</strong></li>
+    <li><strong>Reboot the instance.</strong> The SSM agent caches its
+    credentials and will not pick up a newly attached role otherwise.</li>
+  </ol>
+  <p class="muted">Session Manager connected after the reboot.</p>
+</div>
+
+<h2>5. Deployment (in the server terminal)</h2>
+
+<div class="step">
+  <h3>Step 5 — Become the <code>ubuntu</code> user</h3>
+<pre>sudo su - ubuntu
+whoami &amp;&amp; pwd</pre>
+  <p class="muted">Session Manager starts you as <code>ssm-user</code>, which is
+  not the user the service runs as. Expect <code>ubuntu</code> and
+  <code>/home/ubuntu</code>. (EC2 Instance Connect and SSH land you as
+  <code>ubuntu</code> already — skip this step there.)</p>
+</div>
+
+<div class="step">
+  <h3>Step 6 — Install git</h3>
+<pre>sudo apt-get update -qq &amp;&amp; sudo apt-get install -y -qq git &amp;&amp; git --version</pre>
+  <p class="muted">Result: git 2.43.0</p>
+</div>
+
+<div class="step">
+  <h3>Step 7 — Create the application directory</h3>
+<pre>sudo mkdir -p /opt/governingai &amp;&amp; sudo chown -R ubuntu:ubuntu /opt/governingai
+ls -ld /opt/governingai</pre>
+  <p class="muted">Ownership must be <code>ubuntu ubuntu</code>: the service runs
+  as that user and writes the audit log into this tree.</p>
+</div>
+
+<div class="step">
+  <h3>Step 8 — Supply the GitHub token without recording it</h3>
+<pre>read -s -p "GitHub token: " GH &amp;&amp; echo
+echo "captured ${#GH} characters"</pre>
+  <p class="muted"><code>read -s</code> suppresses echo, so the token is not
+  displayed and does not enter shell history. The length check confirms the paste
+  landed: about 40 characters for a classic <code>ghp_</code> token, about 93 for
+  a fine-grained one.</p>
+</div>
+
+<div class="step">
+  <h3>Step 9 — Clone the private repository</h3>
+<pre>git clone -b develop https://$GH@github.com/DanduLokesh9/scdes.git /opt/governingai
+unset GH</pre>
+  <p class="muted">Result: 235 objects, 3.40 MiB. <code>unset</code> clears the
+  token from the environment immediately afterwards.</p>
+</div>
+
+<div class="step">
+  <h3>Step 10 — Verify the deployment scripts are present</h3>
+<pre>ls /opt/governingai/deploy</pre>
+  <p class="muted">Expected: <code>enable_tls.sh  nginx  push.ps1
+  setup_server.sh  systemd</code>. Worth checking explicitly — if the code was
+  pushed before those files existed, the next step has nothing to run.</p>
+</div>
+
+<div class="step">
+  <h3>Step 11 — Build and start everything</h3>
+<pre>cd /opt/governingai &amp;&amp; bash deploy/setup_server.sh</pre>
+  <p>Three to five minutes. Each stage announces itself and is verified before
+  the next begins:</p>
+  <table>
+    <tr><th>Stage</th><th>Result on this run</th></tr>
+    <tr><td>System packages, nginx, git</td><td>installed</td></tr>
+    <tr><td>Find a Python 3.11+ interpreter</td><td>python3.12 (3.12.3)</td></tr>
+    <tr><td>Create virtualenv, install requirements</td><td>dependencies OK</td></tr>
+    <tr><td>Run the test suite on the server</td><td><strong>794 passed in 25.84s</strong></td></tr>
+    <tr><td>Install and start the systemd service</td><td>active</td></tr>
+    <tr><td>App answers on 127.0.0.1:8765</td><td>HTTP 200</td></tr>
+    <tr><td>nginx configured and reloaded</td><td>syntax OK</td></tr>
+    <tr><td>nginx proxies through to the app</td><td>HTTP 200</td></tr>
+  </table>
+  <p class="muted">The script is idempotent — safe to re-run after a failure
+  rather than needing to be unpicked. Running the tests <em>on the server</em>
+  matters: it proves the deployed environment works, not just the laptop it was
+  written on.</p>
+</div>
+
+<h2>6. HTTPS</h2>
+
+<div class="step">
+  <h3>Step 12 — Issue the certificate</h3>
+<pre>bash deploy/enable_tls.sh you@your-real-email.com</pre>
+  <p>The email is used by Let's Encrypt only to warn of an expiry that failed to
+  renew. Any real mailbox is fine; it need not be on the domain.</p>
+  <p><strong>Run this only after <code>http://</code> loads in a browser.</strong>
+  Certbot proves control of the name by answering a challenge on port 80 at that
+  exact hostname. If DNS has not propagated, or port 80 is shut, it fails with a
+  message that does not obviously say so — which is why the script checks the
+  name resolves to this host before starting.</p>
+  <table>
+    <tr><th>Check</th><th>Result</th></tr>
+    <tr><td>Certificate issued</td><td>CN=app.staging.governingai.us, Let's Encrypt</td></tr>
+    <tr><td>Valid</td><td>14 Aug 2026 → 12 Nov 2026 (90 days)</td></tr>
+    <tr><td>Renewal dry run</td><td>all simulated renewals succeeded</td></tr>
+    <tr><td>HTTPS</td><td>HTTP 200</td></tr>
+    <tr><td>Plain HTTP</td><td>HTTP 301 → HTTPS</td></tr>
+  </table>
+  <p class="muted">The dry run is the point of that stage: it establishes that
+  renewal will work in 60 days rather than discovering otherwise on the day the
+  certificate lapses.</p>
+</div>
+
+<h2>7. Certificate renewal — and how it fails</h2>
+
+<p>Let's Encrypt certificates last <strong>90 days</strong>. Certbot installs a
+systemd timer that attempts renewal twice daily and acts at about day 60, so in
+normal operation there is nothing to do. The failure mode is not that renewal is
+hard; it is that <strong>renewal fails silently</strong> and the first visible
+symptom is a browser refusing to load the site.</p>
+
+<div class="warn">
+  <strong>The single most useful habit.</strong> A renewal that has never been
+  tested is not a renewal — it is an assumption with a 90-day fuse. Run
+  <code>sudo certbot renew --dry-run</code> after issuing a certificate, and
+  again any time nginx, the DNS record or the firewall changes. It performs a
+  real renewal against Let's Encrypt's staging endpoint without consuming a
+  certificate, so it can be run freely.
+</div>
+
+<h3>Normal state — verify, don't assume</h3>
+<pre># Is the timer active, and when did it last run?
+sudo systemctl list-timers 'certbot*' --all
+
+# What certificates exist, and when do they expire?
+sudo certbot certificates
+
+# Will renewal actually work? This is the one that matters.
+sudo certbot renew --dry-run</pre>
+<p class="muted">Expect the dry run to end with <em>"Congratulations, all
+simulated renewals succeeded"</em>. Anything else needs attention now, not in
+sixty days.</p>
+
+<h3>Manual renewal</h3>
+<pre># Renew only if within the renewal window (does nothing otherwise)
+sudo certbot renew
+
+# Force it regardless of the window — use sparingly, there are rate limits
+sudo certbot renew --force-renewal
+
+# Then, if certbot did not reload nginx itself
+sudo systemctl reload nginx</pre>
+<p class="muted">Let's Encrypt permits 5 duplicate certificates per week for the
+same set of names. Repeatedly forcing renewal while debugging will exhaust that
+and lock you out for a week, so debug with <code>--dry-run</code> instead.</p>
+
+<h3>Case study: this exact failure, on the sibling server</h3>
+
+<p>Worth recording in full, because nothing about it was obvious from the
+outside and the same latent fault can exist on any server here.</p>
+
+<p>A second staging site, <code>app.staging.hazmit.ai</code>, began showing
+Chrome's <em>"Your connection is not private"</em> with
+<code>NET::ERR_CERT_DATE_INVALID</code>. Its certificate had expired 19 days
+earlier. Diagnosis, in order:</p>
+
+<table>
+  <tr><th>Check</th><th>Finding</th><th>Conclusion</th></tr>
+  <tr><td>Ports 22 / 80 / 443 from outside</td><td>all open</td><td>not a firewall</td></tr>
+  <tr><td><code>http://…/.well-known/acme-challenge/test</code></td><td>HTTP 404 from nginx</td><td>ACME can reach the host — a 404 here is a <em>good</em> sign, it proves nginx answered</td></tr>
+  <tr><td><code>systemctl list-timers 'certbot*'</code></td><td>active, last run 2 hours earlier</td><td>the timer was never the problem — it was running and failing</td></tr>
+  <tr><td><code>certbot renew --dry-run</code></td><td><em>"Could not bind TCP port 80 because it is already in use"</em></td><td>root cause</td></tr>
+</table>
+
+<p><strong>The cause.</strong> The certificate had originally been issued with
+certbot's <code>standalone</code> authenticator, which starts its own temporary
+web server on port 80 to answer the challenge. That worked at the time —
+presumably before nginx was installed. Once nginx held port 80 permanently,
+certbot could no longer bind it, so every renewal attempt failed on the same
+error. The timer kept firing and kept failing, daily, for roughly a month.</p>
+
+<p><strong>The fix</strong> is to switch the authenticator to the nginx plugin,
+which cooperates with a running web server instead of needing the port to
+itself:</p>
+
+<pre>sudo apt-get install -y python3-certbot-nginx
+
+# Reissues the certificate AND rewrites the stored renewal configuration
+# to use nginx from now on. A plain `certbot renew` would keep using the
+# broken standalone method and fail identically.
+sudo certbot certonly --nginx -d app.staging.hazmit.ai --force-renewal
+
+# Prove the repair, rather than hoping
+sudo certbot renew --dry-run</pre>
+
+<p class="muted"><code>certonly</code> fetches the certificate without touching
+the nginx site configuration, so how the site is served is unchanged. The nginx
+plugin reloads nginx itself, so no separate reload was needed — confirmed by
+reading the served certificate from outside.</p>
+
+<h3>Which authenticator is a certificate using?</h3>
+<pre>sudo grep -H authenticator /etc/letsencrypt/renewal/*.conf</pre>
+<p><code>authenticator = nginx</code> or <code>webroot</code> is safe alongside a
+running web server. <strong><code>authenticator = standalone</code> on a machine
+running nginx or Apache is a certificate that will silently fail to renew</strong>
+— fix it before it expires, using the commands above with the correct domain.</p>
+
+<h3>Recovering an already-expired certificate</h3>
+<p>The steps are the same; expiry changes nothing about the process, only the
+urgency. Note that a browser having seen HSTS for the domain will refuse to let
+anyone click through the warning, so the site is fully unreachable rather than
+merely alarming — there is no partial degradation to buy time with.</p>
+
+<h3>Do not rely on the expiry email</h3>
+<p>Let's Encrypt emails the address registered with the account before a
+certificate lapses. In the case above, either that address was stale or the mail
+went unread, and the failure ran for a month unnoticed. Check what address is on
+file:</p>
+<pre>sudo grep -r '"contact"' /etc/letsencrypt/accounts/*/*/regr.json</pre>
+<p>Better than relying on mail: an uptime check against
+<code>https://</code> from outside the server, which fails the moment a
+certificate does. Or a weekly cron that runs <code>certbot renew --dry-run</code>
+and alerts on a non-zero exit.</p>
+
+<h3>Applying the lesson to every other host</h3>
+<p>Any certificate issued with <code>--standalone</code> before a web server was
+installed carries this fault dormant. On each machine:</p>
+<pre>sudo certbot renew --dry-run</pre>
+<p>Passing means it is fine. Failing means it will expire, and the error names
+the reason.</p>
+
+<h2>8. Verification from outside</h2>
+
+<table>
+  <tr><th>Check</th><th>Result</th></tr>
+  <tr><td><code>https://app.staging.governingai.us/</code></td><td>HTTP 200, 5951 bytes</td></tr>
+  <tr><td>Onboarding and launcher present in the HTML</td><td>yes</td></tr>
+  <tr><td><code>/api/portals</code></td><td>HTTP 200</td></tr>
+  <tr><td><code>/assets/flags/SC.png</code> (static asset)</td><td>HTTP 200, 28,885 bytes</td></tr>
+  <tr><td>TLS certificate subject / issuer</td><td>correct host / Let's Encrypt</td></tr>
+  <tr><td>Service survives reboot</td><td>enabled via systemd</td></tr>
+</table>
+
+<h2>9. Operating it</h2>
+
+<pre>sudo systemctl status governingai      # is it running?
+sudo journalctl -u governingai -f      # live logs
+sudo systemctl restart governingai     # after a code change</pre>
+
+<h3>Deploying an update</h3>
+<pre>cd /opt/governingai
+git pull
+sudo systemctl restart governingai</pre>
+
+<div class="warn">
+  <strong>Why an update cannot destroy the record.</strong> The audit log
+  (<code>corpus/audit/log.jsonl</code>), the registrations
+  (<code>data/registrations.jsonl</code>) and the filled appendix workbooks
+  (<code>corpus/registry/</code>) are written at runtime and are not tracked in
+  git, so <code>git pull</code> leaves them untouched. This matters specifically
+  because the audit log is a hash chain: overwriting it would break the one
+  property the application exists to guarantee.
+</div>
+
+<h2>10. Outstanding — before this URL is shared</h2>
+
+<div class="stop">
+  <strong>The application has no authentication.</strong> The sign-in screen
+  establishes who is acting but does not verify it, and the user is carried in a
+  URL parameter. The site is now publicly reachable, so anyone with the address
+  can act as the Council and adopt parameter sets.
+  <p style="margin:6pt 0 0">The application binds to <code>127.0.0.1</code>
+  rather than <code>0.0.0.0</code>, so nginx is the only route in — that is what
+  makes a password at the proxy effective rather than bypassable on port
+  8765.</p>
+</div>
+
+<h3>Putting a password on the staging site</h3>
+<pre>sudo apt-get install -y apache2-utils
+sudo htpasswd -c /etc/nginx/.htpasswd yourname
+sudo nano /etc/nginx/sites-available/governingai
+#   uncomment:  auth_basic "Governing AI — staging";
+#               auth_basic_user_file /etc/nginx/.htpasswd;
+sudo nginx -t &amp;&amp; sudo systemctl reload nginx</pre>
+<p class="muted">Both lines are already present in the shipped config, commented,
+with these instructions above them.</p>
+
+<h3>Other known limits</h3>
+<ul>
+  <li><strong>Registration is not verification.</strong> The portal checks that an
+  email is on a <code>.gov</code>/<code>.org</code>/<code>.us</code>-style domain
+  and records the claim; no confirmation message is sent. Every stored entry is
+  marked <code>verified: false</code>.</li>
+  <li><strong>The audit log is tamper-evident, not tamper-proof.</strong> Editing
+  a past entry breaks the chain and is detected, but anyone with file access could
+  rewrite it from the beginning. Closing that needs an append-only store or
+  signatures.</li>
+  <li><strong>Single instance, single disk.</strong> Persistence is the root EBS
+  volume. There are no snapshots configured — worth adding before this holds
+  anything that matters.</li>
+</ul>
+
+<h2>11. Files created for this deployment</h2>
+<table>
+  <tr><th>Path</th><th>Purpose</th></tr>
+  <tr><td><code>deploy/setup_server.sh</code></td><td>Idempotent server bootstrap — packages, Python, venv, tests, service, nginx</td></tr>
+  <tr><td><code>deploy/enable_tls.sh</code></td><td>Certbot with pre-flight DNS check and a renewal dry run</td></tr>
+  <tr><td><code>deploy/systemd/governingai.service</code></td><td>Restart on crash, start on boot, localhost binding, modest hardening</td></tr>
+  <tr><td><code>deploy/nginx/governingai.conf</code></td><td>Reverse proxy, forwarding headers, optional basic auth</td></tr>
+  <tr><td><code>deploy/push.ps1</code></td><td>Alternative Windows-side deploy over scp, for when no GitHub token should touch the server</td></tr>
+  <tr><td><code>requirements.txt</code></td><td>The three runtime dependencies</td></tr>
+</table>
+<p class="muted">One change was also made to the application itself:
+<code>HOST</code> and <code>PORT</code> now read from the environment, defaulting
+to <code>127.0.0.1:8765</code>. Any managed host that assigns a port needs this.</p>
+
+<footer class="muted">
+  Governing AI — staging deployment runbook · 14 August 2026 ·
+  https://app.staging.governingai.us
+</footer>
+
+</body>
+</html>

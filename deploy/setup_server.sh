@@ -86,10 +86,24 @@ curl -fsS -o /dev/null -w "    HTTP %{http_code} from the app\n" http://127.0.0.
 
 # -------------------------------------------------------------------- nginx
 
-say "Configuring nginx for $DOMAIN"
-sudo cp deploy/nginx/governingai.conf /etc/nginx/sites-available/governingai
-sudo ln -sf /etc/nginx/sites-available/governingai /etc/nginx/sites-enabled/governingai
-sudo rm -f /etc/nginx/sites-enabled/default
+# Certbot writes the 443 server block and the redirect into this same file when
+# TLS is issued. Copying the repo template over it therefore *removes HTTPS* —
+# quietly, because the certificate stays on disk and nginx reloads happily on
+# port 80 alone. That is exactly what a routine re-deploy did: the site came
+# back up, the deploy reported success, and https:// stopped answering.
+#
+# So a config Certbot has already touched is left alone. To adopt a changed
+# template, copy it over deliberately and re-run certbot --nginx.
+if sudo grep -qs "listen 443" /etc/nginx/sites-available/governingai; then
+  say "Leaving the nginx config alone — Certbot has added TLS to it"
+  echo "    To adopt a changed template, copy it over and re-run:"
+  echo "      sudo certbot --nginx -d $DOMAIN --redirect"
+else
+  say "Configuring nginx for $DOMAIN"
+  sudo cp deploy/nginx/governingai.conf /etc/nginx/sites-available/governingai
+  sudo ln -sf /etc/nginx/sites-available/governingai /etc/nginx/sites-enabled/governingai
+  sudo rm -f /etc/nginx/sites-enabled/default
+fi
 sudo nginx -t
 sudo systemctl reload nginx
 

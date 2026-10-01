@@ -266,14 +266,68 @@ def start_project(message: str, provider: Provider) -> ChatResult:
     )
 
 
+# ------------------------------------------------- another organization's own
+
+def own_document_hits(message: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Passages from the asking organization's own uploaded documents.
+
+    The index `retrieval` searches is built from `corpus/` — the reference
+    agency's documents. Only that agency may search it. Everybody else is
+    searched against what they uploaded themselves, which `intake` keeps in
+    their own container. Reported: signed in as the DEMO agency, a search for
+    a phrase written nowhere in that account returned SCDES's documents.
+    """
+    from app import intake
+    return intake.evidence_for(message, limit=limit)
+
+
+def answer_from_own_documents(message: str, provider_name: str) -> ChatResult:
+    """Search for an organization that does not own the reference corpus.
+
+    Quotes, not phrasing: the passages are shown as they were written, so
+    nothing is sent anywhere to be reworded. What-ifs and project drafts read
+    the reference agency's configuration and Appendix A, so they are not run
+    from here at all."""
+    if detect_mode(message) != QUERY:
+        return ChatResult(
+            mode=QUERY, provider=provider_name, in_scope=False,
+            answer=("Search looks through your organization's own documents. "
+                    "To start a project, open Projects; to try a change, use "
+                    "the screen that holds that setting."))
+    hits = own_document_hits(message)
+    citations = [{"n": n, "citation": f"{h['file']} · paragraph {h['paragraph'] + 1}",
+                  "source": "your document", "section": "",
+                  "snippet": h["quote"], "authoritative": False,
+                  "score": h["score"]} for n, h in enumerate(hits, start=1)]
+    if not hits:
+        return ChatResult(
+            mode=QUERY, provider=provider_name, in_scope=False,
+            answer=("Nothing in your organization's own documents matches that. "
+                    "Search covers only what your organization has uploaded — "
+                    "never another organization's documents."))
+    return ChatResult(
+        mode=QUERY, provider=provider_name, citations=citations,
+        answer=(f"Found in your organization's own documents: "
+                f"{len(hits)} passage{'' if len(hits) == 1 else 's'}, quoted below "
+                f"as written."))
+
+
 # ----------------------------------------------------------------------- entry
 
 def chat(message: str, *, provider: Provider | None = None,
          prefer: str | None = None) -> ChatResult:
     """Single entry point. Runs as CHAT_ACTOR, which cannot write anything."""
     assert CHAT_ACTOR.readonly, "the chat actor must never be write-capable"
-    provider = provider or get_provider(prefer)
+    from app import tenant
     message = (message or "").strip()
+    if not tenant.owns_corpus():
+        # Before a provider is even chosen: nothing of this organization's
+        # question needs to leave the machine to be answered.
+        if not message:
+            return ChatResult(QUERY, "Search your organization's own documents.",
+                              "local")
+        return answer_from_own_documents(message, "local")
+    provider = provider or get_provider(prefer)
     if not message:
         return ChatResult(QUERY, "Ask a question, run a what-if, or describe a "
                                  "problem to start a project.", provider.name)

@@ -29,11 +29,30 @@ BAND_APPENDICES = {
            "Appendix J", "Appendix K"},
 }
 
-BAND_APPROVAL = {
-    LOW: "Bureau-level approval sufficient; the CTO may approve at Gate 0.",
-    MODERATE: "AI Governance Council review required at the gate.",
-    HIGH: "Council review plus independent review required.",
-}
+def band_approval() -> dict[str, str]:
+    """Who approves at each risk band.
+
+    Derived rather than stated, because the approver is a framework answer. An
+    agency that named one decision-maker has no council to route a Moderate
+    system to, and telling them otherwise sends the approval nowhere.
+    """
+    from app import decider
+    who = decider.body()
+    return {
+        LOW: "Bureau-level approval is sufficient at Gate 0.",
+        MODERATE: f"Review by {who} is required at the gate.",
+        HIGH: f"Review by {who} plus an independent review is required.",
+    }
+
+
+#: Convenience for callers that only want one band.
+def approval_for(band: str) -> str:
+    return band_approval().get(band, "")
+
+
+def _decider_possessive() -> str:
+    from app import decider
+    return decider.possessive()
 
 BAND_REVIEW_CADENCE = {LOW: "Annual", MODERATE: "Semi-annual", HIGH: "Quarterly"}
 
@@ -157,7 +176,7 @@ def _explain(result: RiskResult, moderate_max: float) -> str:
     text = (f"Composite {result.total:g} of {result.max_possible:g} → "
             f"{result.band} risk. Driven by {drivers}. "
             f"{result.triggers[0].capitalize()}.")
-    return text + f" {BAND_APPROVAL[result.band]}"
+    return text + f" {approval_for(result.band)}"
 
 
 def council_required(band: str) -> bool:
@@ -329,12 +348,12 @@ def score_quote(quote: Quote, *, risk: RiskResult, budget_cfg: dict[str, Any],
     if risk.council_required:
         rationale.append(
             f"{risk.band} risk does not block the purchase — it sets the approval "
-            f"path. {BAND_APPROVAL[risk.band]} The award decision is the "
-            f"Council's to log."
+            f"path. {approval_for(risk.band)} The award decision is "
+            f"{_decider_possessive()} to log."
         )
 
     # Over budget is a hard flag, never a silent downgrade: the quote is still
-    # fully scored so the Council can see what it would be buying.
+    # fully scored so the decider can see what it would be buying.
     if fit.over_budget:
         verdict = "hold"
     elif score >= 60 and not (risk.band == HIGH and goal_score < 50):

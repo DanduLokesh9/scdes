@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Technical Overview — Governing AI</title>
+<style>
+  @page { size: A4; margin: 17mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font: 10.5pt/1.55 "Segoe UI", system-ui, sans-serif; color: #16242c; margin: 0; }
+  h1 { font-size: 21pt; margin: 0 0 4pt; letter-spacing: -.3pt; }
+  .sub { color: #5b6e74; font-size: 10pt; margin: 0 0 15pt; }
+  h2 { font-size: 13.5pt; margin: 19pt 0 7pt; padding-bottom: 3pt;
+       border-bottom: 1.5pt solid #16242c; }
+  h3 { font-size: 11pt; margin: 13pt 0 4pt; }
+  p { margin: 0 0 7pt; }
+  code, pre { font-family: Consolas, "Courier New", monospace; }
+  code { background: #eef2f3; padding: 1pt 3pt; border-radius: 2pt; font-size: 9.5pt; }
+  pre { background: #14232b; color: #e8f0f2; padding: 8pt 10pt; border-radius: 4pt;
+        font-size: 8.5pt; line-height: 1.45; white-space: pre-wrap; margin: 5pt 0 9pt; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt; font-size: 9.5pt; }
+  th, td { text-align: left; padding: 4pt 7pt; border-bottom: .6pt solid #cfd9dc;
+           vertical-align: top; }
+  th { background: #eef2f3; font-weight: 600; }
+  td.n { text-align: right; white-space: nowrap; color: #5b6e74; }
+  .plain { background: #f6f9fa; border-left: 3pt solid #1c7a43;
+           padding: 7pt 11pt; margin: 8pt 0; page-break-inside: avoid; }
+  .warn { background: #fdf6e7; border-left: 3pt solid #8a6510; padding: 7pt 11pt; margin: 9pt 0; }
+  .muted { color: #5b6e74; font-size: 9.5pt; }
+  ul { margin: 0 0 8pt; padding-left: 17pt; }
+  li { margin-bottom: 3pt; }
+  footer { margin-top: 20pt; padding-top: 7pt; border-top: .6pt solid #cfd9dc; }
+</style>
+</head>
+<body>
+
+<h1>Technical Overview</h1>
+<p class="sub">The AI Governance application — how it is built, in plain English<br>
+14 August 2026 · <strong>https://app.staging.governingai.us</strong></p>
+
+<div class="plain">
+  <strong>In one paragraph.</strong> An agency writes its AI rules into Word and
+  Excel documents and adopts them. This application <em>reads those documents</em>
+  and turns them into working software: it answers questions about the rules with
+  exact citations, scores projects for risk using the agency's own weightings, and
+  walks a project through the approval gates while filling in the real
+  spreadsheets. Nothing about the rules is written into the code. Point it at a
+  different agency's documents and it becomes that agency's application.
+</div>
+
+<h2>1. The shape of it</h2>
+
+<p>Two halves, as with most web applications:</p>
+
+<table>
+  <tr><th style="width:20%">Half</th><th>What it does</th><th>Written in</th></tr>
+  <tr><td><strong>Back end</strong></td>
+      <td>Runs on the server. Reads the documents, does the thinking — risk
+          scoring, searching, permissions, record-keeping — and answers questions
+          from the front end.</td>
+      <td>Python (24 files, ~7,300 lines)</td></tr>
+  <tr><td><strong>Front end</strong></td>
+      <td>Runs in the browser. Everything you see and click. Holds no rules of its
+          own; it asks the back end for everything and draws the answer.</td>
+      <td>HTML, CSS, JavaScript (8 files, ~3,000 lines)</td></tr>
+</table>
+
+<p>They talk over <strong>29 web addresses</strong> (called endpoints). The
+browser asks <code>/api/registry</code> and gets back the list of projects; it
+asks <code>/api/budget</code> and gets the money figures. Plain messages in, plain
+messages out.</p>
+
+<div class="plain">
+  <strong>Why the split matters.</strong> All the judgement lives in one half.
+  The browser cannot decide that a project is Low risk or that someone may
+  approve a gate — it can only display what the server said. Anyone who tampers
+  with the page in their browser changes what <em>they</em> see and nothing about
+  the record.
+</div>
+
+<h2>2. The back end, file by file</h2>
+
+<p>Grouped by what each one is for, rather than alphabetically.</p>
+
+<h3>Reading the agency's documents</h3>
+<table>
+  <tr><th style="width:26%">File</th><th>What it does</th><th class="n">Lines</th></tr>
+  <tr><td><code>ingest_xlsx.py</code></td>
+      <td>Reads the Excel appendices and works out which cells are questions,
+          which are answers, and which are tables. A spreadsheet does not know it
+          is a form; this is what teaches the software to see one.</td><td class="n">595</td></tr>
+  <tr><td><code>ingest_docx.py</code></td>
+      <td>Reads the Word documents and splits them at their own headings, so every
+          chunk of text is a complete numbered section — which is what makes
+          citations exact.</td><td class="n">222</td></tr>
+  <tr><td><code>profile.py</code></td>
+      <td>Works out <em>whose</em> documents these are: the agency's name, its
+          instruments, its approval gates, its roles. This is what lets the same
+          software serve any agency.</td><td class="n">588</td></tr>
+  <tr><td><code>vocabulary.py</code></td>
+      <td>Counts how the documents actually name things — "Category 1" versus
+          "Bucket 1" — and makes every screen use the winner.</td><td class="n">290</td></tr>
+</table>
+
+<h3>The thinking</h3>
+<table>
+  <tr><th style="width:26%">File</th><th>What it does</th><th class="n">Lines</th></tr>
+  <tr><td><code>scoring.py</code></td>
+      <td>The risk calculation. Six factors, each weighted, producing Low, Moderate
+          or High. Takes numbers in and gives an answer out, changing nothing —
+          which is what lets the app show "if you changed this weight, these two
+          projects would move" before anything is saved.</td><td class="n">304</td></tr>
+  <tr><td><code>retrieval.py</code></td>
+      <td>The search. Finds the passages that answer a question, favouring rare
+          specific words ("Gate 3") over common ones ("the").</td><td class="n">255</td></tr>
+  <tr><td><code>workflow.py</code></td>
+      <td>The six approval gates: what each one requires, and what happens when a
+          gate is passed.</td><td class="n">347</td></tr>
+  <tr><td><code>budget.py</code></td>
+      <td>Which proposals fit the money available, and in what order.</td><td class="n">220</td></tr>
+  <tr><td><code>integrity.py</code></td>
+      <td>Audits the documents against themselves — citations that lead nowhere,
+          blank dates, duties given to roles that do not exist.</td><td class="n">584</td></tr>
+  <tr><td><code>vision.py</code>, <code>oversight.py</code></td>
+      <td>The strategic picture, and monitoring duties plus incident
+          handling.</td><td class="n">592</td></tr>
+</table>
+
+<h3>Keeping it honest</h3>
+<table>
+  <tr><th style="width:26%">File</th><th>What it does</th><th class="n">Lines</th></tr>
+  <tr><td><code>authz.py</code></td>
+      <td>Decides who may do what. <strong>Every</strong> change passes through one
+          function here. One gate, not fifty — fifty gates means fifty chances to
+          forget one.</td><td class="n">152</td></tr>
+  <tr><td><code>audit.py</code></td>
+      <td>Writes down everything that happened, including refusals. Each entry
+          carries a fingerprint of the one before it, so removing or editing an
+          old entry breaks the chain visibly.</td><td class="n">128</td></tr>
+  <tr><td><code>mode.py</code></td>
+      <td>Holds whether the agency is still tuning its settings or has locked them.
+          Locking is a one-way door: reopening needs a Council decision.</td><td class="n">108</td></tr>
+  <tr><td><code>council.py</code></td>
+      <td>Proposals, approvals and the decision log.</td><td class="n">279</td></tr>
+</table>
+
+<h3>Plumbing</h3>
+<table>
+  <tr><th style="width:26%">File</th><th>What it does</th><th class="n">Lines</th></tr>
+  <tr><td><code>server.py</code></td>
+      <td>The web server. Receives requests, checks who is asking, calls the right
+          module, sends the answer back.</td><td class="n">403</td></tr>
+  <tr><td><code>registry.py</code>, <code>config.py</code></td>
+      <td>The project register, and the tunable settings.</td><td class="n">844</td></tr>
+  <tr><td><code>states.py</code>, <code>theme.py</code></td>
+      <td>The 51 agencies on the map, and turning an agency's colours into a usable
+          interface theme.</td><td class="n">508</td></tr>
+  <tr><td><code>onboarding.py</code></td>
+      <td>The two sign-up portals and the email eligibility rule.</td><td class="n">141</td></tr>
+  <tr><td><code>agent.py</code>, <code>provider.py</code></td>
+      <td>The question-answering assistant, and the option to use a language model
+          for phrasing. Works fully offline without one.</td><td class="n">530</td></tr>
+</table>
+
+<h2>3. The front end, file by file</h2>
+
+<table>
+  <tr><th style="width:22%">File</th><th>What it does</th><th class="n">Lines</th></tr>
+  <tr><td><code>index.html</code></td>
+      <td>The page skeleton: header, left menu, centre column, right column. Empty
+          boxes that JavaScript fills in.</td><td class="n">129</td></tr>
+  <tr><td><code>app.js</code></td>
+      <td>The main application. Draws every screen — registry, lifecycle, budget,
+          oversight — by asking the back end for the data.</td><td class="n">931</td></tr>
+  <tr><td><code>launcher.js</code></td>
+      <td>The map of the United States, the state flags, the per-agency colours,
+          and the sign-in step.</td><td class="n">596</td></tr>
+  <tr><td><code>onboard.js</code></td>
+      <td>The first screen: which kind of organisation, then the email
+          registration.</td><td class="n">164</td></tr>
+  <tr><td><code>tour.js</code></td>
+      <td>The guided walkthrough that spotlights each part of the interface.</td><td class="n">199</td></tr>
+  <tr><td><code>tokens.css</code></td>
+      <td>The colour definitions. Every colour in the app resolves through this
+          one file, which is why an agency's palette can replace it
+          wholesale.</td><td class="n">118</td></tr>
+  <tr><td><code>app.css</code>, <code>launcher.css</code></td>
+      <td>The layout and appearance of everything.</td><td class="n">848</td></tr>
+</table>
+
+<h3>Two pieces of artwork worth mentioning</h3>
+<ul>
+  <li><strong>The map (135 KB).</strong> Real geography — US Census boundary data,
+      drawn with the standard projection for the continental US, with Alaska and
+      Hawaii as insets. Built once, offline. No mapping service, no internet, no
+      account needed.</li>
+  <li><strong>51 state flags (1.9 MB).</strong> The genuine flags, bundled locally
+      so the app never calls out to the internet. Fifty are public domain;
+      Mississippi's 2020 design is copyrighted with free use granted, and that
+      difference is recorded rather than glossed over.</li>
+</ul>
+
+<h2>4. How a click travels through the system</h2>
+
+<p>Someone opens the Registry screen. What actually happens:</p>
+
+<pre>1. Browser     app.js asks for /api/registry
+2. Server      server.py receives it, works out who is asking
+3. Permission  authz.py: may this person see the register?  yes
+4. Data        registry.py reads the project records from disk
+5. Thinking    scoring.py works out each project's risk band
+6. Wording     vocabulary.py labels them in the agency's own terms
+7. Answer      the server sends back a plain data message
+8. Drawing     app.js turns it into the table you see</pre>
+
+<p class="muted">Steps 3 to 6 are all on the server. The browser receives finished
+answers, never the rules that produced them.</p>
+
+<h2>5. Where everything is kept</h2>
+
+<p>There is <strong>no database</strong>. Everything is ordinary files, which
+matters for something meant to stand up as a legal record: any of it can be opened
+and read years later without this software.</p>
+
+<table>
+  <tr><th style="width:34%">What</th><th>Where</th><th class="n">Size</th></tr>
+  <tr><td>Adopted framework (Word)</td><td><code>corpus/framework/</code></td><td class="n">71 KB</td></tr>
+  <tr><td>Operations manual (Word)</td><td><code>corpus/manual/</code></td><td class="n">58 KB</td></tr>
+  <tr><td>14 appendix workbooks (Excel)</td><td><code>corpus/appendices/</code></td><td class="n">311 KB</td></tr>
+  <tr><td>Tuned settings</td><td><code>corpus/config/*.yaml</code></td><td class="n">21 KB</td></tr>
+  <tr><td>Search index (rebuilt automatically)</td><td><code>corpus/index/</code></td><td class="n">785 KB</td></tr>
+  <tr><td>Audit trail</td><td><code>corpus/audit/log.jsonl</code></td><td class="n">64 KB</td></tr>
+  <tr><td>Council decisions</td><td><code>council/decision_log.jsonl</code></td><td class="n">25 KB</td></tr>
+  <tr><td>Portal registrations</td><td><code>data/registrations.jsonl</code></td><td class="n">—</td></tr>
+</table>
+
+<p>The <code>.jsonl</code> files are one record per line, in a format that is
+readable as plain text. The audit trail is the important one: each line includes a
+fingerprint of the line above it.</p>
+
+<div class="warn">
+  <strong>What that does and does not prove.</strong> Change or delete a past entry
+  and every entry after it stops matching, so the tampering is <em>detected</em> and
+  the exact point named. But someone with access to the file could rewrite the whole
+  chain from the beginning and it would verify cleanly. It is tamper-<em>evident</em>,
+  not tamper-<em>proof</em>. Closing that gap needs a write-once store or digital
+  signatures.
+</div>
+
+<h2>6. What it is built on</h2>
+
+<table>
+  <tr><th style="width:34%">Piece</th><th>Choice</th></tr>
+  <tr><td>Language</td><td>Python 3.11 or newer</td></tr>
+  <tr><td>Web server</td><td>Python's own built-in one — no Django, Flask or FastAPI</td></tr>
+  <tr><td>Browser code</td><td>Plain JavaScript — no React, Vue or Angular</td></tr>
+  <tr><td>Database</td><td>None</td></tr>
+  <tr><td>Outside libraries</td><td>Three, all for reading documents: <code>openpyxl</code> (Excel),
+      <code>python-docx</code> (Word), <code>PyYAML</code> (settings)</td></tr>
+  <tr><td>Internet needed</td><td>None. It runs with the network unplugged.</td></tr>
+  <tr><td>Automated tests</td><td>794, run in about 13 seconds</td></tr>
+</table>
+
+<div class="plain">
+  <strong>Why so few tools.</strong> Every framework added is something that must
+  be kept updated for as long as the record must be readable — and a governance
+  record outlives most frameworks. A build with three dependencies can be picked up
+  in five years and still run. It also means an agency's IT department can read the
+  whole thing without learning anybody's framework first.
+</div>
+
+<h2>7. Search, without artificial intelligence</h2>
+
+<p>Asking "what triggers a Level 2 incident?" gives an answer citing
+<em>Operations Manual §22.4</em>. That is not a language model — it is word
+matching, weighted so that rare specific terms count for more than common ones.</p>
+
+<p>Chosen over an AI-based approach for three reasons: the documents are searched
+using their own vocabulary, where exact words beat approximate meaning; the passage
+found <em>is</em> the citation, so the reference is exact rather than plausible;
+and it needs no model, no service and no internet.</p>
+
+<p>It also <strong>refuses</strong>. Ask something the documents do not cover and it
+declines rather than guessing.</p>
+
+<p class="muted">An optional language model can be connected to make answers read
+more smoothly. Even then, the searching and the citing stay local — only the
+retrieved passage and the question would ever leave the machine.</p>
+
+<h2>8. How it serves fifty states</h2>
+
+<p>Nothing about South Carolina is written into the code. The agency's name, its
+instruments, its gates, its roles and its vocabulary are all worked out from
+whichever documents are loaded.</p>
+
+<p>This was proved rather than assumed: a synthetic agency was invented that shares
+nothing with SCDES — different state, different instruments named "Schedule 1–5"
+instead of "Appendix A–N", different checkpoints, different vocabulary — and the
+software adapts to all of it. A test also searches the code for agency-specific
+words and fails the build if any appear.</p>
+
+<div class="warn">
+  <strong>One honest limit.</strong> Only one agency's documents are loaded at a
+  time. Selecting Texas on the map changes the theme and the name, but Texas's
+  documents do not exist here. Rather than show South Carolina's projects under a
+  Texas heading — a fabricated record — every screen refuses and explains why.
+</div>
+
+<h2>9. Known limits</h2>
+<ul>
+  <li><strong>No log-in security.</strong> The sign-in screen establishes who is
+      acting but does not verify it. Anyone with the web address can currently act
+      as the Council. Real authentication, or a password on the site, is needed
+      before it is shared.</li>
+  <li><strong>Registration is not verification.</strong> The portal checks an email
+      is on a public-sector or non-profit domain and records the claim. No
+      confirmation message is sent; every entry is marked unverified.</li>
+  <li><strong>The audit trail is tamper-evident, not tamper-proof</strong> (§5).</li>
+  <li><strong>Tuning covers 13 of the 1,068 fields</strong> the reader finds. The
+      parser reads everything; the tuning screen exposes the parameters that
+      matter most.</li>
+  <li><strong>No live model monitoring exists yet</strong>, so the Oversight screen
+      shows a schedule of what is owed rather than invented drift figures.</li>
+  <li><strong>One server, one disk, no backups configured.</strong> Worth adding
+      before this holds anything that matters.</li>
+</ul>
+
+<footer class="muted">
+  Governing AI — technical overview · 14 August 2026 · 24 back-end files,
+  8 front-end files, 29 endpoints, 794 tests
+</footer>
+
+</body>
+</html>

@@ -22,6 +22,15 @@ const TOUR = { at: 0, steps: [], onDone: null };
 const tourEsc = (s) => String(s ?? "").replace(/[&<>"]/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+/* Whatever this agency calls the body that holds the decision. app.js owns the
+   answer; this reads it if app.js loaded, and names no shape at all if it did
+   not — the tour has to survive app.js failing, which is when somebody most
+   wants it. */
+function tourWhoDecides() {
+  return (window.whoDecides && window.whoDecides())
+    || "whoever holds the decision";
+}
+
 const TOUR_STEPS = [
   {
     target: ".tb-brand",
@@ -59,18 +68,21 @@ const TOUR_STEPS = [
   {
     target: "#modeChip",
     title: "The governance mode",
-    body: '"Tuning open" means the Office of Technology can still move ' +
-          'parameters. Once the Council adopts them it becomes "Guardrails ' +
-          'live", and from then on even OT must route a change through the ' +
-          "Council. This is a one-way door.",
+    // `body` may be a function, resolved when the step is drawn — see
+    // drawTour(). The deciding body is not known when this array is defined,
+    // and hardcoding "Council" here told every agency it had one.
+    body: () => '"Tuning open" means the Office of Technology can still move '
+          + `parameters. Once ${tourWhoDecides()} adopts them it becomes `
+          + '"Guardrails live", and from then on even OT must route a change '
+          + `through ${tourWhoDecides()}. This is a one-way door.`,
   },
   {
     target: "#integrityChip",
     title: "What is wrong with the record",
-    body: "A standing audit of the corpus itself: citations that do not " +
-          "resolve, dates left blank, duties assigned to roles the framework " +
-          "never established. It reports and proposes — correcting an adopted " +
-          "instrument is a Council amendment.",
+    body: () => "A standing audit of the corpus itself: citations that do not "
+          + "resolve, dates left blank, duties assigned to roles the framework "
+          + "never established. It reports and proposes — correcting an adopted "
+          + `instrument is an amendment for ${tourWhoDecides()}.`,
   },
   {
     target: "#spine",
@@ -93,11 +105,18 @@ const TOUR_STEPS = [
           "and where a value was derived rather than stated, it says so.",
   },
   {
-    target: "#reason",
+    // Was the reason column, which is now inside the help panel. Pointing at
+    // the button that opens it is the honest equivalent.
+    target: "#guideDock",
     title: "…and why",
-    body: "Always the reason for what is on the left, with the section it " +
-          "cites. Explainability is part of the frame rather than a panel you " +
-          "go looking for.",
+    // Rewritten with the panel it now points at. The old copy said
+    // explainability was "part of the frame rather than a panel you go looking
+    // for" — which stopped being true the moment the frame became a panel, and
+    // a tour that describes the previous version of a screen is worse than no
+    // tour.
+    body: "Every screen can say why it exists and which section it cites. Ask " +
+          "here — “What is this screen?” — along with the walkthrough, " +
+          "the shortcuts, and reporting anything that looks wrong.",
   },
 ];
 
@@ -113,6 +132,7 @@ function startTour(force) {
   if (!TOUR.steps.length) return;
   TOUR.at = 0;
   document.getElementById("tour").hidden = false;
+  document.getElementById("tourCard").hidden = false;   // now a separate element
   document.body.classList.add("tour-open");
   drawTour();
   if (force) { try { localStorage.setItem("scdes.tour", "seen"); } catch (e) {} }
@@ -120,6 +140,7 @@ function startTour(force) {
 
 function endTour() {
   document.getElementById("tour").hidden = true;
+  document.getElementById("tourCard").hidden = true;
   document.body.classList.remove("tour-open");
   document.querySelectorAll(".tour-lit").forEach((n) =>
     n.classList.remove("tour-lit"));
@@ -146,7 +167,7 @@ function drawTour() {
   node.classList.add("tour-lit");
 
   // The mask is four panels around the target rather than one box with a hole,
-  // so the spotlit element stays fully interactive and keeps its own colours.
+  // so the spotlit element stays fully interactive and keeps its own colors.
   const r = node.getBoundingClientRect();
   const pad = 6;
   const box = { top: r.top - pad, left: r.left - pad,
@@ -162,7 +183,7 @@ function drawTour() {
   card.innerHTML = `
     <p class="tour-count">${TOUR.at + 1} of ${TOUR.steps.length}</p>
     <h3 id="tourTitle">${tourEsc(step.title)}</h3>
-    <p>${tourEsc(step.body)}</p>
+    <p>${tourEsc(typeof step.body === "function" ? step.body() : step.body)}</p>
     <div class="tour-actions">
       <button class="btn ghost" id="tourSkip" type="button">Skip</button>
       <span class="tour-spacer"></span>
@@ -179,10 +200,16 @@ function drawTour() {
   document.getElementById("tourNext").focus();
 }
 
-/** Put the card beside the target, and keep it on screen. */
+/** Put the card next to the target without covering it.
+
+    Below, then above, then beside. The "beside" case is what the left-hand rail
+    needs: it is nearly the full height of the window, so there is no room above
+    or below, and centring the card vertically drops it straight on top of the
+    thing being explained. */
 function placeTourCard(card, box) {
   const W = window.innerWidth, H = window.innerHeight;
-  const cw = Math.min(340, W - 32);
+  const gap = 12, edge = 12;
+  const cw = Math.min(340, W - edge * 2);
   card.style.width = `${cw}px`;
 
   // Measure after sizing, since the height depends on how the body wraps.
@@ -190,15 +217,29 @@ function placeTourCard(card, box) {
   card.style.top = "0px"; card.style.left = "0px";
   const ch = card.getBoundingClientRect().height;
 
-  const below = box.top + box.height + 12;
-  const above = box.top - ch - 12;
-  let top = below + ch < H - 12 ? below : (above > 12 ? above : (H - ch) / 2);
-  let left = box.left + box.width / 2 - cw / 2;
-  left = Math.max(16, Math.min(left, W - cw - 16));
-  top = Math.max(12, Math.min(top, H - ch - 12));
+  const fitsBelow = box.top + box.height + gap + ch < H - edge;
+  const fitsAbove = box.top - gap - ch > edge;
+  const fitsRight = box.left + box.width + gap + cw < W - edge;
+  const fitsLeft = box.left - gap - cw > edge;
 
-  card.style.top = `${top}px`;
-  card.style.left = `${left}px`;
+  let top, left;
+  if (fitsBelow || fitsAbove) {
+    top = fitsBelow ? box.top + box.height + gap : box.top - gap - ch;
+    left = box.left + box.width / 2 - cw / 2;
+  } else if (fitsRight || fitsLeft) {
+    left = fitsRight ? box.left + box.width + gap : box.left - gap - cw;
+    // Align near the top of a tall target rather than its center, so the card
+    // sits beside the part of it the reader is looking at.
+    top = Math.min(box.top, H - ch - edge);
+  } else {
+    // Nowhere clear: center it and accept the overlap. The card is above the
+    // spotlight in the stacking order, so it stays readable.
+    top = (H - ch) / 2;
+    left = (W - cw) / 2;
+  }
+
+  card.style.left = `${Math.max(edge, Math.min(left, W - cw - edge))}px`;
+  card.style.top = `${Math.max(edge, Math.min(top, H - ch - edge))}px`;
   card.style.visibility = "visible";
 }
 
