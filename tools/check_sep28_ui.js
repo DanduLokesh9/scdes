@@ -40,6 +40,12 @@ async function main() {
   sys.click();
   check("pressing again closes it", text.hidden && sys.getAttribute("aria-expanded") === "false");
   check("several fields have one", doc.querySelectorAll("#dhForm .info-i").length >= 5);
+  // BUG-DAA12AE2: each ⓘ shares a row with its question, not a line of its own.
+  check("every ⓘ is on the same line as its question",
+    [...doc.querySelectorAll("#dhForm .info-i")].every((b) =>
+      b.parentElement.classList.contains("vr-q") && b.previousElementSibling
+      && b.previousElementSibling.tagName === "LABEL")
+    && /\.vr-q \{ display: flex; align-items: center/.test(css));
 
   console.log("\nFramework 2.3");
   const html = window.fbControl({ kind: "single", key: "have.policy", options: [

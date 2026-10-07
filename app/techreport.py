@@ -309,6 +309,187 @@ def refusals(since: datetime) -> list[dict[str, Any]]:
             for a, n in counts.most_common(8)]
 
 
+# ------------------------------------------------- saves that did not happen
+#
+# Sep 29: 111 of a client's framework answers were saved under no
+# organization while her screen looked normal, and nobody knew for three
+# days. The server now refuses such a change (server._proven_session_gate,
+# _no_organization_gate) and the screen says so; these make sure the team
+# hears about it the same day too.
+
+REFUSED = ROOT / "data" / "refused_saves.jsonl"
+HOLDING = ROOT / "data" / "agencies" / "~unresolved"
+
+
+def note_refused_save(claimed_email: str, organization: str, path: str, why: str) -> None:
+    """One refused change. The address is the one the browser claimed — the
+    team needs it to reach the person — and nothing of what they typed."""
+    try:
+        row = {"at": _utcnow().isoformat(timespec="seconds"),
+               "email": str(claimed_email or "")[:200], "agency": str(organization or "")[:80],
+               "where": _scrub(path, 120), "why": str(why or "")[:80]}
+        with _LOCK:
+            REFUSED.parent.mkdir(parents=True, exist_ok=True)
+            with REFUSED.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(row) + "\n")
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
+def refused_since(since: datetime) -> list[dict[str, Any]]:
+    """Refused changes, one line per person and organization."""
+    if not REFUSED.is_file():
+        return []
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+    for line in REFUSED.read_text(encoding="utf-8").splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        when = _parse(row.get("at", ""))
+        if when is None or when < since:
+            continue
+        key = (row.get("email", ""), row.get("agency", ""))
+        g = groups.setdefault(key, {"email": key[0] or "no address", "organization":
+                                    _org_name(key[1]) if key[1] else "no organization",
+                                    "count": 0, "first": row["at"], "last": row["at"],
+                                    "why": row.get("why", ""), "where": set()})
+        g["count"] += 1
+        g["last"] = max(g["last"], row["at"])
+        g["where"].add(row.get("where", ""))
+    out = []
+    for g in groups.values():
+        g["where"] = sorted(g["where"])[:4]
+        out.append(g)
+    return sorted(out, key=lambda g: -g["count"])
+
+
+def integrity_alarms(since: datetime) -> list[str]:
+    """Anything that means work may have gone somewhere it should not.
+
+    * The holding area for "no organization" has anything in it.
+    * The log shows a change filed under no organization since the last
+      report (sign-ins and sign-outs excepted — they are recorded before the
+      person's organization is known).
+    * An organization was active in the framework since the last report but
+      none of its saved answers is that recent.
+    """
+    alarms: list[str] = []
+    try:
+        left = [f.name for f in HOLDING.iterdir() if f.is_file()
+                and ".bak-" not in f.name and ".recovered-" not in f.name] if HOLDING.is_dir() else []
+        if left:
+            alarms.append(f"The no-organization holding area has {len(left)} file(s) in it "
+                          f"({', '.join(left[:3])}) — somebody's work may have been saved there.")
+    except OSError:
+        pass
+    try:
+        from app import tenant, usage
+        rows = usage._read(usage._log_path())
+    except Exception:                                         # noqa: BLE001
+        return alarms
+    recent = [r for r in rows if (_parse(r.get("at", "")) or since) >= since]
+    stray = [r for r in recent
+             if ((r.get("detail") or {}).get("organisation") or (r.get("detail") or {}).get("agency")) == tenant.ANONYMOUS
+             and r.get("action") not in ("sign_in", "sign_out")]
+    if stray:
+        names = sorted({(r.get("detail") or {}).get("actor_name", "") or "unnamed" for r in stray})
+        alarms.append(f"{len(stray)} change(s) were filed under no organization, by "
+                      f"{', '.join(names[:5])}.")
+    active: Counter = Counter()
+    for r in recent:
+        if r.get("action") == "answer_framework_question":
+            org = (r.get("detail") or {}).get("organisation") or (r.get("detail") or {}).get("agency") or ""
+            if org and org != tenant.ANONYMOUS and not _is_test(org):
+                active[org] += 1
+    for org, n in active.items():
+        if not _answers_saved_since(org, since):
+            alarms.append(f"{_org_name(org)} answered {n} framework question(s) since the last "
+                          f"report, but none of its saved answers is that recent.")
+    return alarms
+
+
+def _answers_saved_since(org: str, since: datetime) -> bool:
+    try:
+        from app import tenant, versions
+        held = tenant.set_current(org)
+        try:
+            working = versions.state().get("working") or {}
+        finally:
+            tenant.reset(held)
+    except Exception:                                         # noqa: BLE001
+        return True                     # cannot tell: say nothing rather than alarm
+    for value in working.values():
+        when = _parse(value.get("at", "")) if isinstance(value, dict) else None
+        if when and when >= since:
+            return True
+    return False
+
+
+# ------------------------------------------------- a framework passing 70%
+#
+# Asked for (Oct 2026): "whoever completed 70% of their framework in their
+# agency, send a report to the mailbox, same as the bug report." So it rides
+# in the same 5 PM email, to the same people, and that email goes out on a
+# day an organization first passes the mark even if no bug was reported.
+# Each organization is reported once; the state file remembers which.
+
+def public_url() -> str:
+    return os.getenv("GAIUS_PUBLIC_URL", "").strip().rstrip("/") or "https://app.staging.governingai.us"
+
+
+def milestone() -> int:
+    try:
+        value = int(os.getenv("GAIUS_MILESTONE_PERCENT", "").strip() or 70)
+    except ValueError:
+        return 70
+    return value if 1 <= value <= 100 else 70
+
+
+def _steps_left(org: str) -> list[str]:
+    """The framework steps that still have questions open, e.g.
+    "Step 06 · Your non-negotiables: 3 open"."""
+    try:
+        from app import module_one, tenant, versions
+        held = tenant.set_current(org)
+        try:
+            answers = versions.state().get("working") or {}
+        finally:
+            tenant.reset(held)
+        out = []
+        for step in module_one.STEPS:
+            left = [q for q in step.questions
+                    if module_one.visible(q, answers) and not module_one.answered(q, answers)]
+            if left:
+                out.append(f"Step {step.number} · {step.title}: {len(left)} open")
+        return out
+    except Exception:                                         # noqa: BLE001
+        return []
+
+
+def frameworks_reached(already: set[str] | None = None) -> list[dict[str, Any]]:
+    """Organizations at or past the mark that have not been reported yet."""
+    from app import tenancy, tenant, usage
+    mark = milestone()
+    done = already or set()
+    out = []
+    for code, container in (tenancy._load().get("agencies") or {}).items():
+        if code in done or code == tenant.ANONYMOUS or _is_test(code) \
+                or container.get("status") != "active" or container.get("tester"):
+            continue
+        progress = usage.progress_of(code)
+        if progress.get("percent", 0) < mark:
+            continue
+        people = [m.get("name") or m.get("email", "") for m in container.get("members", [])]
+        out.append({"agency": code, "organization": _org_name(code),
+                    "state": code.split(".", 1)[0].upper(),
+                    "percent": progress.get("percent", 0),
+                    "answered": progress.get("answered", 0), "asked": progress.get("asked", 0),
+                    "adopted": bool(progress.get("adopted")),
+                    "people": people[:8], "left": _steps_left(code)})
+    return sorted(out, key=lambda r: -r["percent"])
+
+
 # ---------------------------------------------------------------- the report
 
 def build(since: datetime, now: datetime | None = None) -> dict[str, Any]:
@@ -326,18 +507,56 @@ def build(since: datetime, now: datetime | None = None) -> dict[str, Any]:
         "stalled": stalled(now),
         "refusals": refusals(since),
         "backlog": backlog(now),
+        "refused_saves": refused_since(since),
+        "alarms": integrity_alarms(since),
+        "reached": frameworks_reached(set((_state().get("milestones") or {}).keys())),
+        "milestone": milestone(),
     }
+
+
+def worth_sending(report: dict[str, Any]) -> bool:
+    """A new bug report, a refused save, or an alarm — any one is a reason to
+    write; a quiet day sends nothing."""
+    return bool(report["bugs"] or report.get("refused_saves") or report.get("alarms")
+                or report.get("reached"))
 
 
 def subject(report: dict[str, Any]) -> str:
     n = len(report["bugs"])
     day = eastern(_parse(report["until"]))
-    return (f"GAIUS technical report — {n} new bug report{'' if n == 1 else 's'} · "
+    extra = ""
+    if report.get("alarms"):
+        extra += f" · {len(report['alarms'])} alarm{'' if len(report['alarms']) == 1 else 's'}"
+    saves = sum(g["count"] for g in report.get("refused_saves") or [])
+    if saves:
+        extra += f" · {saves} refused save{'' if saves == 1 else 's'}"
+    reached = report.get("reached") or []
+    if reached:
+        extra += (f" · {len(reached)} framework{'' if len(reached) == 1 else 's'} "
+                  f"past {report.get('milestone', 70)}%")
+    return (f"GAIUS technical report — {n} new bug report{'' if n == 1 else 's'}{extra} · "
             f"{day:%a %b} {day.day}")
 
 
 def text(report: dict[str, Any]) -> str:
     L = [subject(report), f"Covers {_et(report['since'])} to {_et(report['until'])}.", ""]
+    if report.get("alarms"):
+        L += ["ALARMS — WORK MAY HAVE GONE SOMEWHERE IT SHOULD NOT"]
+        L += [f"  ! {a}" for a in report["alarms"]] + [""]
+    if report.get("reached"):
+        L += [f"REACHED {report.get('milestone', 70)}% OF THE FRAMEWORK"]
+        for r in report["reached"]:
+            L += [f"  {r['organization']} ({r['state']}) — {r['percent']}%, "
+                  f"{r['answered']} of {r['asked']} answered{' · adopted' if r['adopted'] else ''}",
+                  f"    Working on it: {', '.join(r['people']) or 'nobody named'}"]
+            L += [f"    Still open: {line}" for line in r["left"][:6]] or ["    Every question asked so far is answered."]
+        L += ["  Their answers, question by question, are attached as a PDF for each.",
+              f"  To read them inside GAIUS instead: sign in at {public_url()} from DEMO agency, "
+              "open Admin → Organizations, and choose View as next to one of their people.", ""]
+    if report.get("refused_saves"):
+        L += ["SAVES REFUSED (the person was told their session ended)"]
+        L += [f"  {g['count']}× {g['email']} · {g['organization']} · {g['why']} · "
+              f"last {_et(g['last'])} · {', '.join(g['where'])}" for g in report["refused_saves"]] + [""]
     L.append(f"NEW BUG REPORTS ({len(report['bugs'])})")
     for b in report["bugs"]:
         L += ["", f"{b['id']} · {_et(b['at'])}{' · TEST ACCOUNT' if b['test'] else ''}",
@@ -368,15 +587,44 @@ def text(report: dict[str, Any]) -> str:
     bl = report["backlog"]
     L += ["", f"OPEN BUG BACKLOG: {bl['open']} open, oldest {bl['oldest_days']} days.",
           "", "Reply to people from Admin → Reported bugs. This email is sent at "
-          f"{send_hour()}:00 Eastern on days with new bug reports."]
+          f"{send_hour()}:00 Eastern on days with new bug reports, refused saves or alarms."]
     return "\n".join(L)
 
 
 def html_body(report: dict[str, Any]) -> str:
     e = lambda s: html.escape(str(s or ""))                # noqa: E731
     parts = [f"<h1 style='font-size:18px'>{e(subject(report))}</h1>",
-             f"<p>Covers {e(_et(report['since']))} to {e(_et(report['until']))}.</p>",
-             f"<h2 style='font-size:16px'>New bug reports ({len(report['bugs'])})</h2>"]
+             f"<p>Covers {e(_et(report['since']))} to {e(_et(report['until']))}.</p>"]
+    if report.get("alarms"):
+        parts.append("<div style='border:2px solid #a40000;border-radius:6px;padding:10px;margin:8px 0'>"
+                     "<h2 style='font-size:16px;margin:0 0 6px;color:#a40000'>Alarms — work may have gone "
+                     "somewhere it should not</h2><ul>"
+                     + "".join(f"<li>{e(a)}</li>" for a in report["alarms"]) + "</ul></div>")
+    if report.get("reached"):
+        parts.append(f"<h2 style='font-size:16px'>Reached {report.get('milestone', 70)}% of the framework</h2>")
+        for r in report["reached"]:
+            parts.append("<div style='border:1px solid #1f7a45;border-radius:6px;padding:10px;margin:8px 0'>"
+                         f"<p style='margin:0'><b>{e(r['organization'])}</b> ({e(r['state'])}) — "
+                         f"<b>{r['percent']}%</b>, {r['answered']} of {r['asked']} answered"
+                         f"{' · adopted' if r['adopted'] else ''}</p>"
+                         f"<p style='margin:4px 0'>Working on it: {e(', '.join(r['people']) or 'nobody named')}</p>"
+                         + ("<ul style='margin:4px 0'>" + "".join(f"<li>{e(x)}</li>" for x in r["left"][:6]) + "</ul>"
+                            if r["left"] else "<p style='margin:4px 0'>Every question asked so far is answered.</p>")
+                         + "</div>")
+        parts.append("<p>Their answers, question by question, are attached as a PDF for each. "
+                     f"To read them inside GAIUS instead: <a href='{e(public_url())}'>sign in</a> from "
+                     "DEMO agency, open <b>Admin → Organizations</b>, and choose <b>View as</b> next to "
+                     "one of their people.</p>")
+    if report.get("refused_saves"):
+        parts.append("<h2 style='font-size:16px'>Saves refused</h2><p style='color:#555'>Each person "
+                     "was told their session ended and asked to sign in again.</p>"
+                     "<table style='border-collapse:collapse' cellpadding='4' border='1'><tr>"
+                     "<th scope='col'>Times</th><th scope='col'>Who</th><th scope='col'>Organization</th>"
+                     "<th scope='col'>Why</th><th scope='col'>Last</th></tr>"
+                     + "".join(f"<tr><td>{g['count']}</td><td>{e(g['email'])}</td><td>{e(g['organization'])}</td>"
+                               f"<td>{e(g['why'])}</td><td>{e(_et(g['last']))}</td></tr>"
+                               for g in report["refused_saves"]) + "</table>")
+    parts.append(f"<h2 style='font-size:16px'>New bug reports ({len(report['bugs'])})</h2>")
     for b in report["bugs"]:
         parts.append("<div style='border:1px solid #ccc;border-radius:6px;padding:10px;margin:8px 0'>"
                      f"<p style='margin:0'><b>{e(b['id'])}</b> · {e(_et(b['at']))}"
@@ -413,7 +661,7 @@ def html_body(report: dict[str, Any]) -> str:
     bl = report["backlog"]
     parts.append(f"<p><b>Open bug backlog:</b> {bl['open']} open, oldest {bl['oldest_days']} days.</p>"
                  f"<p style='color:#555'>Reply to people from Admin → Reported bugs. Sent at "
-                 f"{send_hour()}:00 Eastern on days with new bug reports.</p>")
+                 f"{send_hour()}:00 Eastern on days with new bug reports, refused saves or alarms.</p>")
     return "<html><body style='font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111'>" \
            + "".join(parts) + "</body></html>"
 
@@ -434,10 +682,49 @@ def _save(state: dict[str, Any]) -> None:
     tmp.replace(STATE)
 
 
+def _answer_pdfs(report: dict[str, Any]) -> list[tuple[str, bytes, str]]:
+    """The framework answers, as a PDF, for each organization past the mark
+    (app/framework_report.py)."""
+    from app import framework_report
+    day = eastern(_parse(report["until"]))
+    stamp = f"{day:%Y-%m-%d}"
+    out = []
+    for r in report.get("reached") or []:
+        try:
+            pdf = framework_report.build_pdf(
+                r["agency"], r["organization"], percent=r["percent"],
+                answered=r["answered"], asked=r["asked"], stamp=f"{day:%B} {day.day}, {day.year}")
+            out.append((framework_report.filename(r["organization"], stamp), pdf, "application/pdf"))
+        except Exception:                                     # noqa: BLE001
+            traceback.print_exc()          # the email still goes, without that one
+    return out
+
+
+def _log_pdfs_sent(report: dict[str, Any], to: list[str]) -> None:
+    """Each organization's answers that left GAIUS by email, and to whom — on
+    the team's side of the log, which no organization's History reads."""
+    try:
+        from app import audit
+        for r in report.get("reached") or []:
+            audit.JsonlAuditLog(audit.DEFAULT_LOG).append(
+                actor="gaius.team", role="ot", action="framework_answers_emailed",
+                target="GAIUS team", outcome="allowed", mode="report",
+                detail={"agency": "", "about": r["agency"], "percent": r["percent"],
+                        "to": to, "actor_name": "Technical report"})
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
 def send(report: dict[str, Any]) -> list[dict[str, Any]]:
     from app import mailer
     subj, body, rich = subject(report), text(report), html_body(report)
-    return [{"to": to, **mailer.send(to, subj, body, rich)} for to in recipients()]
+    files = _answer_pdfs(report)
+    extra = {"attachments": files} if files else {}
+    sent = [{"to": to, **mailer.send(to, subj, body, rich, **extra)} for to in recipients()]
+    delivered = [s["to"] for s in sent if s.get("sent")]
+    if files and delivered:
+        _log_pdfs_sent(report, delivered)
+    return sent
 
 
 def run_once(now_utc: datetime | None = None) -> dict[str, Any]:
@@ -454,8 +741,17 @@ def run_once(now_utc: datetime | None = None) -> dict[str, Any]:
         since = _parse(state.get("window_start", "")) or (now_utc - timedelta(days=1))
         report = build(since, now_utc)
         outcome: dict[str, Any] = {"ran": True, "day": day, "bugs": len(report["bugs"])}
-        if report["bugs"]:
+        if worth_sending(report):
             outcome["sent"] = send(report)
+            # Each organization past the mark is reported once — but only
+            # once it has actually been sent to somebody; a failed send tries
+            # again tomorrow.
+            if report.get("reached") and any(s.get("sent") for s in outcome["sent"]):
+                marks = dict(state.get("milestones") or {})
+                for r in report["reached"]:
+                    marks[r["agency"]] = {"day": day, "percent": r["percent"]}
+                state["milestones"] = marks
+                outcome["reached"] = [r["agency"] for r in report["reached"]]
         state.update({"last_day": day, "window_start": now_utc.isoformat(timespec="seconds")})
         history = list(state.get("history") or [])[-60:]
         history.append({"day": day, "bugs": outcome["bugs"],

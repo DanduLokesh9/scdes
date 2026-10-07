@@ -241,9 +241,12 @@ def test_an_order_only_shows_to_the_agency_that_raised_it() -> None:
 
 # --------------------------------------------------------- the card route
 
-def test_the_card_route_refuses_until_a_provider_exists() -> None:
+def test_the_card_route_refuses_until_a_provider_exists(monkeypatch) -> None:
     """No key and no webhook secret means no card checkout. Offering one that
-    cannot work is worse than not offering it."""
+    cannot work is worse than not offering it. (About the generic provider:
+    Stripe's Buy Button, on by default, is switched off here — see
+    tests/test_stripe.py for it.)"""
+    monkeypatch.setenv("STRIPE_OFF", "1")
     priced()
     assert billing.card_route_ready() is False
     out = billing.start_order("sc.des", billing.BY_CARD, STAFF)
@@ -254,6 +257,7 @@ def test_the_card_route_refuses_until_a_provider_exists() -> None:
 def test_a_key_without_a_webhook_secret_is_not_ready(monkeypatch) -> None:
     """A deployment that can take money but cannot verify the confirmation
     would charge people and never learn that it had."""
+    monkeypatch.setenv("STRIPE_OFF", "1")
     monkeypatch.setenv("BILLING_PROVIDER_KEY", "sk-test")
     assert billing.card_route_ready() is False
 

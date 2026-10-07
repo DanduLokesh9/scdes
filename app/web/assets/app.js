@@ -63,7 +63,15 @@ async function api(p, opts = {}) {
   const qs = "user=" + encodeURIComponent(S.user) +
              (reg ? "&email=" + encodeURIComponent(reg) : "");
   const r = await fetch(p + sep + qs, { headers, ...opts });
-  return r.json();
+  const data = await r.json();
+  // The server could not tie this to a signed-in person in an organization:
+  // keep the change to send again after signing back in, and say so, rather
+  // than let the screen look as if it saved (see sessionEnded).
+  if (data && data.session_ended) {
+    if (opts.method === "POST" && window.queueRefused) window.queueRefused(p, opts.body);
+    if (window.sessionEnded) window.sessionEnded(data.error);
+  }
+  return data;
 }
 const post = (p, b) => api(p, { method: "POST", body: JSON.stringify(b) });
 
@@ -111,7 +119,8 @@ const META = {
   // gates, and a reference page that explains them and holds no record — see
   // the note above `api_config` in app/server.py.
   projects:  ["Projects", "Each use of AI, from the problem to the day it is switched off."],
-  lifecycle: ["Lifecycle", "See the seven steps every project goes through."],
+  // Shown as Guide since Oct 2026 (the team's request); the key is unchanged.
+  lifecycle: ["Guide", "See the seven steps every project goes through."],
   budget:    ["Budget", "What it costs you, all in."],
   oversight: ["Oversight", "Who decides, and what happens when it goes wrong."],
   process:   ["Process", "See how a new request is reviewed and approved."],
@@ -165,7 +174,39 @@ function orgMismatch(st) {
   if (crumb && own.label) crumb.textContent = own.label;
   if (own.label) document.title = `${own.label} — AI Governance`;
 }
-document.addEventListener("agencychange", () => { if (S.state) orgMismatch(S.state); });
+document.addEventListener("agencychange", () => {
+  if (S.state && !S.state.impersonating) orgMismatch(S.state);
+});
+
+/* "Viewing as … — End impersonation". Only ever drawn for a GAIUS admin who
+   chose View as on the Organizations screen (app/impersonate.py). Fixed
+   across the top, above everything — including any dialog the viewed
+   person's state would open — so the way out is always one press away. */
+function impersonationBar(st) {
+  const old = document.getElementById("impBar");
+  if (old) old.remove();
+  document.body.classList.remove("impersonating");
+  const v = st && st.impersonating;
+  if (!v) return;
+  const bar = el("div", "imp-bar");
+  bar.id = "impBar";
+  bar.setAttribute("role", "region");
+  bar.setAttribute("aria-label", "Impersonation");
+  bar.innerHTML = `<span><b>Viewing as ${esc(v.name)}</b>${v.title ? `, ${esc(v.title)}` : ""}
+      · ${esc(v.organization)} · <b>view only</b> — nothing can be saved or changed.</span>
+    <button type="button" class="btn" id="impEnd">End impersonation</button>`;
+  document.body.prepend(bar);
+  document.body.classList.add("impersonating");
+  bar.querySelector("#impEnd").onclick = async () => {
+    const b = bar.querySelector("#impEnd");
+    b.disabled = true;
+    await post("/api/admin/impersonate/stop", {});
+    location.reload();
+  };
+  const crumb = $("#agencyCrumb");
+  if (crumb && v.organization) crumb.textContent = v.organization;
+  document.title = `Viewing as ${v.name} — ${v.organization}`;
+}
 
 async function refreshState() {
   const st = await api("/api/state");
@@ -178,7 +219,9 @@ async function refreshState() {
   const adminRail = $("#adminRail");
   if (adminRail) adminRail.hidden = !st.admin;
 
-  orgMismatch(st);
+  impersonationBar(st);
+  if (!st.impersonating) orgMismatch(st);
+  watchSessionEnd(st);
 
   const mode = $("#modeChip");
   mode.textContent = st.mode === "operating" ? "Guardrails live" : "Tuning open";
@@ -2918,14 +2961,18 @@ function holdingForm(d, row) {
   const info = (id, label) => INFO[id] ? `<button type="button" class="info-i" aria-expanded="false"
       aria-controls="dh-${id}-info" aria-label="What “${esc(label)}” means">i</button>` : "";
   const infoText = (id) => INFO[id] ? `<p class="small vr-info" id="dh-${id}-info" hidden>${esc(INFO[id])}</p>` : "";
+  /* The question and its ⓘ on one line. The field is a column, so the
+     button used to drop to a line of its own (Brett, BUG-DAA12AE2: "Make
+     all information i icons in line with the question"). */
+  const question = (id, label) => `<span class="vr-q"><label for="dh-${id}">${esc(label)}</label>${info(id, label)}</span>`;
   const sel = (id, label, options, chosen, hint, locked) => `<div class="vr-field">
-    <label for="dh-${id}">${esc(label)}</label>${info(id, label)}${infoText(id)}${help(`dh-${id}`, hint)}
+    ${question(id, label)}${infoText(id)}${help(`dh-${id}`, hint)}
     <select id="dh-${id}"${hint ? ` aria-describedby="dh-${id}-help"` : ""}${locked ? " disabled" : ""}>
       <option value="">Not answered</option>
       ${Object.entries(options).map(([k, l]) => `<option value="${esc(k)}"${k === chosen ? " selected" : ""}>${esc(l)}</option>`).join("")}
     </select></div>`;
   const txt = (id, label, value, hint, { long = false, locked = false } = {}) => `<div class="vr-field">
-    <label for="dh-${id}">${esc(label)}</label>${info(id, label)}${infoText(id)}${help(`dh-${id}`, hint)}
+    ${question(id, label)}${infoText(id)}${help(`dh-${id}`, hint)}
     ${long ? `<textarea id="dh-${id}" rows="2"${hint ? ` aria-describedby="dh-${id}-help"` : ""}>${esc(value || "")}</textarea>`
       : `<input type="text" id="dh-${id}" value="${esc(value || "")}"${hint ? ` aria-describedby="dh-${id}-help"` : ""}${locked ? " readonly" : ""}>`}</div>`;
   const roles = inp.roles || [];
@@ -3164,41 +3211,25 @@ VIEWS.billing = async () => {
         office can attach to a purchase order.</p>`}`;
   root.appendChild(price);
 
-  // The two ways to buy, invoice first.
+  // How to buy: by card, through Stripe. The purchase-order-and-invoice
+  // option was taken off this page at the team's request (Oct 2026); the
+  // invoice route itself still exists on the server, for orders IIA raises.
   const buy = el("div", "panel");
   buy.innerHTML = `
     <h2 class="sub3" style="margin-top:0">How to buy it</h2>
 
     <div class="bl-route">
-      <h3 class="bl-route-h">Purchase order and invoice</h3>
-      <p>The way most public bodies buy software, and the way we expect
-        you to. Tell us here, and we send a quotation and a
-        W-9 so your procurement office can raise a PO. We invoice against
-        it; you pay by ACH or check on your own terms.</p>
-      <p class="small muted">No card, no card-on-file, nothing to cancel.
-        Your subscription starts when the invoice is settled, and you will
-        see it on this page when it is.</p>
-      <div class="row" style="margin-top:12px">
-        <button class="btn" id="blInvoice" type="button">${
-          plan.amount_set ? "Request an invoice" : "Request a quotation"
-        }</button>
-      </div>
-    </div>
-
-    <div class="bl-route">
       <h3 class="bl-route-h">Card</h3>
       ${d.card_ready ? `
-        <p>Pay now on our provider's own secure page. Card, Apple Pay and
-          Google Pay. You leave this site to pay and come straight back.</p>
-        <p class="small muted">Your card details are entered on the
-          provider's page and never pass through this application.</p>
-        <div class="row" style="margin-top:12px">
+        <div class="row" style="margin:4px 0 12px">
           <button class="btn" id="blCard" type="button">Pay by card</button>
-        </div>`
-      : `<p class="bl-off">${esc(d.card_note || "Not available yet.")}</p>
-         <p class="small muted">Many agencies cannot use a card for a
-           subscription in any case, which is why the invoice route above is
-           the one we lead with.</p>`}
+        </div>
+        <div id="blStripe" class="bl-stripe" aria-live="polite"></div>
+        <p>Pay now on Stripe's own secure page — card, Apple Pay or Google Pay.</p>
+        <p class="small muted">Your card details are entered on Stripe's page and never
+          pass through this application. Your subscription starts once the payment is
+          confirmed, and you will see it on this page.</p>`
+      : `<p class="bl-off">${esc(d.card_note || "Not available yet.")}</p>`}
     </div>`;
   root.appendChild(buy);
 
@@ -3248,10 +3279,50 @@ VIEWS.billing = async () => {
     go("billing");
   };
 
-  const invoice = $("#blInvoice");
-  if (invoice) invoice.onclick = () => raise("invoice", invoice);
   const card = $("#blCard");
-  if (card) card.onclick = () => raise("card", card);
+  const sp = d.stripe || {};
+  if (card && sp.available) {
+    /* Stripe's Buy Button (from IIA's CFO). An order is raised first, so the
+       payment can be matched to this organization: the order number goes to
+       Stripe as the client reference, with the payer's email. Stripe's
+       webhook then marks that order paid — or the GAIUS team does, from the
+       Stripe payment reference. */
+    card.onclick = async () => {
+      card.disabled = true;
+      const was = card.textContent;
+      card.textContent = "Just a moment…";
+      const r = await post("/api/billing/order", { route: "card" });
+      card.disabled = false;
+      card.textContent = was;
+      if (!r || !r.ok) {
+        return toast((r && r.error) || "That did not work. Nothing was charged.", true);
+      }
+      const order = r.order.id;
+      const email = registeredEmail();
+      if (!document.querySelector('script[src="https://js.stripe.com/v3/buy-button.js"]')) {
+        const s = document.createElement("script");
+        s.async = true;
+        s.src = "https://js.stripe.com/v3/buy-button.js";
+        document.head.appendChild(s);
+      }
+      const link = `${sp.payment_link}?client_reference_id=${encodeURIComponent(order)}`
+        + (email ? `&prefilled_email=${encodeURIComponent(email)}` : "");
+      const host = $("#blStripe");
+      host.innerHTML = `
+        <p class="small" style="margin:14px 0 8px">Order <b>${esc(order)}</b> is raised. Pay below —
+          it is tagged with this order, so the payment is matched to your organization.</p>
+        <stripe-buy-button buy-button-id="${esc(sp.buy_button_id)}"
+          publishable-key="${esc(sp.publishable_key)}"
+          client-reference-id="${esc(order)}"${email ? ` customer-email="${esc(email)}"` : ""}>
+        </stripe-buy-button>
+        <p class="small" style="margin-top:8px">Button not showing?
+          <a href="${esc(link)}" target="_blank" rel="noopener">Open Stripe's secure payment page</a>
+          (opens in a new tab).</p>`;
+      card.hidden = true;
+    };
+  } else if (card) {
+    card.onclick = () => raise("card", card);
+  }
 };
 
 /* Who you buy from, what it costs, and what else those tools could do.
@@ -6469,7 +6540,10 @@ VIEWS.organizations = async () => {
             <button type="button" class="btn ghost" data-org="${esc(o.agency)}"
               data-orgname="${esc(o.organization)}" data-email="${esc(p.email)}"
               data-name="${esc(p.name || p.email)}" data-drop="1"
-              aria-label="Remove ${esc(p.name || p.email)} from ${esc(o.organization)}">Remove</button></td>
+              aria-label="Remove ${esc(p.name || p.email)} from ${esc(o.organization)}">Remove</button>
+            ${o.status === "active" ? `<button type="button" class="btn ghost" data-viewas="${esc(p.email)}"
+              data-name="${esc(p.name || p.email)}" data-orgname="${esc(o.organization)}"
+              aria-label="View as ${esc(p.name || p.email)}, view only">View as</button>` : ""}</td>
       </tr>`).join("") || `<tr><td colspan="5" class="small muted">Nobody is on it.</td></tr>`
     }</tbody></table></div>`;
 
@@ -6524,6 +6598,22 @@ VIEWS.organizations = async () => {
           }</tbody></table></div>`
           : `<p class="intro">No unfinished sign-ups.</p>`}
       </div>
+
+      ${(d.awaiting_signed || []).length ? `<div class="panel" aria-labelledby="orgSignedH">
+        <h2 class="sub3" id="orgSignedH" style="margin-top:0">Waiting for a signed agreement (${d.awaiting_signed.length})</h2>
+        <p class="small muted">Their counsel asked for the signed form of the Terms of Use, and it was
+          emailed to them and to brett@iiac.ai. When the executed copy comes back, mark it received —
+          they can then get their verification code and continue registering.</p>
+        <div class="table-scroll" role="region" tabindex="0" aria-labelledby="orgSignedH">
+        <table class="vr-table"><thead><tr><th scope="col">Name</th><th scope="col">Work email</th>
+          <th scope="col">Governmental unit</th><th scope="col">Requested</th>
+          <th scope="col"><span class="vh">Actions</span></th></tr></thead><tbody>${
+          d.awaiting_signed.map((p) => `<tr><th scope="row">${esc(p.name || "—")}${p.title ? `, ${esc(p.title)}` : ""}</th>
+            <td class="small">${esc(p.email)}</td><td>${esc(p.unit)}</td>
+            <td class="small">${esc(niceDate(p.requested_at))}</td>
+            <td><button type="button" class="btn ghost" data-signed="${esc(p.email)}" data-name="${esc(p.name || p.email)}"
+              data-unit="${esc(p.unit)}" aria-label="Mark the signed agreement received for ${esc(p.name || p.email)}">Mark signed form received</button></td></tr>`).join("")
+        }</tbody></table></div></div>` : ""}
 
       <div class="panel" aria-labelledby="orgAppH">
         <h2 class="sub3" id="orgAppH" style="margin-top:0">Appoint an admin</h2>
@@ -6607,6 +6697,27 @@ VIEWS.organizations = async () => {
           + "they recorded stays on the record with their name on it.",
       confirmLabel: "Remove them",
       onYes: () => act("/api/admin/member/remove", { agency: b.dataset.org, email: b.dataset.email }),
+    }));
+    root.querySelectorAll("[data-signed]").forEach((b) => b.onclick = () => askConfirm({
+      title: `Signed agreement received from ${b.dataset.name}?`,
+      body: `Only once you have the executed Terms of Use for ${b.dataset.unit}, signed by both `
+          + "parties. They can then get their verification code. This is recorded with your name.",
+      confirmLabel: "Mark received",
+      onYes: () => act("/api/admin/terms/received", { email: b.dataset.signed }, "#orgSaid"),
+    }));
+    // View as — see app/impersonate.py. View only, and nothing reaches the
+    // organization; the bar across the top ends it.
+    root.querySelectorAll("[data-viewas]").forEach((b) => b.onclick = () => askConfirm({
+      title: `View as ${b.dataset.name}?`,
+      body: `You will see ${b.dataset.orgname} exactly as ${b.dataset.name} does — view only. `
+          + "Nothing can be saved or changed, and they are not told or interrupted. "
+          + "Press End impersonation in the bar at the top to come back.",
+      confirmLabel: "View as them",
+      onYes: async () => {
+        const r = await post("/api/admin/impersonate/start", { email: b.dataset.viewas });
+        if (!r || !r.ok) { toast((r && r.error) || "That did not work.", true); return; }
+        location.reload();
+      },
     }));
     root.querySelectorAll("[data-pending]").forEach((b) => b.onclick = () => askConfirm({
       title: `Remove the sign-up for ${b.dataset.name}?`,
@@ -7318,6 +7429,208 @@ function finishSignOut() {
   location.replace(location.pathname);
 }
 
+/* "Your session ended — sign in again."
+
+   On Sep 29 one tab kept working after the session behind it had gone — most
+   likely signed out from another tab — and 111 framework answers were saved
+   under no organization while the screen looked normal. Two things now stop
+   that: the server refuses a change it cannot tie to an organization, and
+   this tab notices when another one signs out or switches account. Either
+   way the person is told plainly, nothing more is sent, and the one button
+   takes them back to sign in. */
+/* Nothing typed is lost. A change the server refused is kept here — for this
+   person and this organization only — and sent again once they have signed
+   back in. Kept in the browser, so it survives the reload a sign-in may take.
+   The same answer refused twice is kept once, newest wins. */
+const OUTBOX_KEY = "gaius.outbox";
+function outbox() {
+  try { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || "[]") || []; }
+  catch (e) { return []; }
+}
+function saveOutbox(items) {
+  try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(items.slice(-300))); } catch (e) {}
+}
+function whoIsHere() {
+  try {
+    const reg = JSON.parse(localStorage.getItem("scdes.registration") || "{}") || {};
+    return { email: String(reg.email || "").toLowerCase(), agency: String(reg.agency || "") };
+  } catch (e) { return { email: "", agency: "" }; }
+}
+function queueRefused(path, body) {
+  const me = whoIsHere();
+  if (!me.email || !me.agency) return;
+  let key = "";
+  try { key = (JSON.parse(body || "{}") || {}).key || ""; } catch (e) {}
+  const items = outbox().filter((i) => !(key && i.path === path && i.key === key
+    && i.email === me.email && i.agency === me.agency));
+  items.push({ path, body: body || "{}", key, email: me.email, agency: me.agency,
+               at: new Date().toISOString() });
+  saveOutbox(items);
+}
+window.queueRefused = queueRefused;
+
+/* Send what was kept, for whoever is signed in now. Anything kept for a
+   different person or organization stays where it is — it is never sent in
+   somebody else's name. Returns how many went. */
+async function flushOutbox() {
+  const me = whoIsHere();
+  if (!me.email || !me.agency || !sessionToken()) return 0;
+  let sent = 0;
+  const keep = [];
+  for (const item of outbox()) {
+    if (item.email !== me.email || item.agency !== me.agency) { keep.push(item); continue; }
+    let r = null;
+    try { r = await api(item.path, { method: "POST", body: item.body }); } catch (e) { r = null; }
+    if (r && r.ok !== false) sent += 1;
+    else if (r && r.session_ended) keep.push(item);   // still not signed in: keep it
+  }
+  saveOutbox(keep);
+  return sent;
+}
+window.flushOutbox = flushOutbox;
+
+/* "Your session ended" — and signing back in from where they are, without
+   losing the screen. A code goes to the address they are signed in with;
+   entering it here signs them back in, and whatever was refused is sent. Where
+   this tab no longer knows who they are (another tab signed out), the button
+   goes back to the start instead, and the kept changes go once they sign in. */
+function keptSentence(me) {
+  const kept = outbox().filter((i) => i.email === me.email && i.agency === me.agency).length;
+  return kept ? `${kept} change${kept === 1 ? " is" : "s are"} kept, and will be saved as soon as you are back.`
+              : "Everything saved before this is where you left it.";
+}
+
+function sessionEnded(why) {
+  const me = whoIsHere();
+  const open = document.getElementById("sessionEndedVeil");
+  if (open) {                    // already saying so: keep the count current
+    const line = open.querySelector("#seKept");
+    if (line) line.textContent = keptSentence(me);
+    return;
+  }
+  const inPlace = !!(me.email && me.agency);
+  const veil = document.createElement("div");
+  veil.id = "sessionEndedVeil";
+  veil.className = "confirm-veil";
+  veil.innerHTML = `
+    <div class="confirm-card" role="alertdialog" aria-modal="true"
+         aria-labelledby="seTitle" aria-describedby="seBody" tabindex="-1">
+      <h2 id="seTitle">Your session ended</h2>
+      <p id="seBody">${esc(why || "You were signed out, so nothing more can be saved from this tab.")}
+        <span id="seKept" aria-live="polite">${esc(keptSentence(me))}</span></p>
+      ${inPlace ? `
+        <p class="small">Sign back in here — a six-digit code goes to <b>${esc(me.email)}</b>.</p>
+        <div id="seCodeRow" hidden>
+          <p class="small" id="seShown"></p>
+          <label class="small" for="seCode" style="display:block">Verification code</label>
+          <input id="seCode" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+        </div>
+        <p class="small" id="seSaid" role="alert"></p>` : ""}
+      <div class="confirm-actions">
+        <button class="btn" id="seGo" type="button">${inPlace ? "Send me a code" : "Sign in again"}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(veil);
+  const go = veil.querySelector("#seGo");
+  const said = veil.querySelector("#seSaid");
+  const focusables = () => [...veil.querySelectorAll("input:not([hidden]), button")]
+    .filter((n) => !n.closest("[hidden]"));
+  veil.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const f = focusables(); if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    e.preventDefault();
+    f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+  });
+  const startOver = () => {
+    ["scdes.registration", "scdes.session"].forEach((k) => {
+      try { localStorage.removeItem(k); } catch (e) {}
+    });
+    location.replace("/");
+  };
+  if (!inPlace) { go.onclick = startOver; go.focus(); return; }
+
+  let stage = "send";
+  const post_ = (path, body) => fetch(path, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .then((r) => r.json()).catch(() => ({ ok: false, error: "Could not reach the server." }));
+  go.onclick = async () => {
+    said.textContent = "";
+    if (stage === "send") {
+      go.disabled = true;
+      const r = await post_("/api/agency/signin", { email: me.email });
+      go.disabled = false;
+      if (!r.ok) { said.textContent = r.error || "Could not send a code."; return; }
+      veil.querySelector("#seCodeRow").hidden = false;
+      if (r.code) veil.querySelector("#seShown").textContent = `No email is sent here, so the code is shown: ${r.code}`;
+      stage = "verify";
+      go.textContent = "Verify and carry on";
+      veil.querySelector("#seCode").focus();
+      return;
+    }
+    const code = (veil.querySelector("#seCode").value || "").replace(/\D/g, "");
+    if (code.length !== 6) { said.textContent = "Enter the six-digit code."; return; }
+    go.disabled = true;
+    const v = await post_("/api/agency/verify", { email: me.email, code });
+    go.disabled = false;
+    if (!v.ok || !v.session) { said.textContent = v.error || "That code was not accepted."; return; }
+    try { localStorage.setItem("scdes.session", v.session); } catch (e) {}
+    // Back as the same person, in the same organization — or start over.
+    let access = {};
+    try { access = await fetch("/api/agency/access?email=" + encodeURIComponent(me.email)).then((r) => r.json()); }
+    catch (e) {}
+    if (access.state !== me.agency) { startOver(); return; }
+    const n = await flushOutbox();
+    veil.remove();
+    await refreshState();
+    toast(n ? `Signed back in. ${n} change${n === 1 ? "" : "s"} saved.` : "Signed back in.");
+  };
+  go.focus();
+}
+window.sessionEnded = sessionEnded;
+
+/* A warning before a sign-in ends. Sessions renew while they are used
+   (app/tenancy.py), so this is for one left idle to its end — said ten
+   minutes ahead, with the way to keep it. */
+let SESSION_WARN = null;
+function watchSessionEnd(st) {
+  clearTimeout(SESSION_WARN);
+  const ends = st && st.session_expires ? new Date(st.session_expires).getTime() : 0;
+  if (!ends) return;
+  const warnIn = ends - Date.now() - 10 * 60 * 1000;
+  if (warnIn > 24 * 3600 * 1000) return;            // more than a day away: look again later
+  SESSION_WARN = setTimeout(() => {
+    if (document.getElementById("sessionWarn")) return;
+    const bar = el("div", "locked");
+    bar.id = "sessionWarn";
+    bar.setAttribute("role", "status");
+    bar.style.margin = "0 0 14px";
+    bar.innerHTML = `<b>Your sign-in ends in about 10 minutes.</b>
+      <div class="row" style="margin-top:8px"><button type="button" class="btn" id="sessionStay">Stay signed in</button></div>`;
+    const record = $("#record");
+    if (record) record.prepend(bar);
+    bar.querySelector("#sessionStay").onclick = async () => {
+      await post("/api/session/renew", {});
+      bar.remove();
+      await refreshState();
+    };
+  }, Math.max(0, warnIn));
+}
+
+// Another tab signed out, or signed in as somebody else: this tab's identity
+// is gone, so it stops here instead of carrying on with nobody behind it.
+window.addEventListener("storage", (e) => {
+  if (!S.state || (e.key !== "scdes.session" && e.key !== "scdes.registration")) return;
+  if (e.key === "scdes.registration" && e.newValue) return;   // a detail changed, not who
+  if (!e.oldValue || e.oldValue === e.newValue) return;       // nobody was signed in
+  // Only a tab that is inside the product — not one on the home page or the
+  // map, where there is nothing to lose.
+  const home = document.getElementById("home");
+  if ((home && !home.hidden) || document.body.classList.contains("launcher-open")) return;
+  sessionEnded(e.newValue ? "You signed in as somebody else in another tab."
+                          : "You signed out in another tab.");
+});
+
 const signOutBtn = $("#signOut");
 if (signOutBtn) signOutBtn.onclick = signOut;
 window.signOut = signOut;
@@ -7437,9 +7750,19 @@ window.signInAs = async (id, name, title) => {
           (who.title ? ` · ${who.title}` : ""));
   };
 
-  if (window.startWelcome && window.welcomeSeen && !window.welcomeSeen())
-    window.startWelcome(land);
-  else land();
+  /* The 60-second welcome no longer plays by itself. Brett's order after the
+     code (Oct 2026) is the disclaimer, then — on first use — the walkthrough;
+     the welcome played on top of both, and again after every sign-in because
+     signing out forgot it had been seen. It stays one click away: "Watch the
+     welcome" on Home, and in the help panel. */
+  land();
+  // Signed in now: the first-use tour may be offered once the disclaimer is
+  // done (see the end of this file).
+  if (window.offerTourSoon) window.offerTourSoon();
+  // Anything kept from a session that ended, for this same person and
+  // organization, goes now.
+  const sent = await flushOutbox();
+  if (sent) toast(`${sent} change${sent === 1 ? "" : "s"} kept from before you signed in again ${sent === 1 ? "was" : "were"} saved.`);
 };
 
 (async () => {
@@ -7485,19 +7808,51 @@ window.signInAs = async (id, name, title) => {
         return !!(saved.verified && saved.agency);
       } catch (e) { return false; }
     };
-    const covered = () => ["#launcher", "#onboard", "#welcome"].some((sel) => {
+    // Not over the disclaimer either (Brett: the disclaimer first, then the
+    // walkthrough), nor over the home page or a View as session.
+    const covered = () => ["#launcher", "#onboard", "#welcome", "#home", "#betaVeil"].some((sel) => {
       const n = $(sel);
       return n && !n.hidden;
-    }) || document.body.classList.contains("launcher-open");
+    }) || document.body.classList.contains("launcher-open")
+      || !!(S.state && S.state.impersonating);
+    // First use means first use for the person, not for this browser: the
+    // server remembers it (app/firstuse.py), so a new laptop does not replay it.
+    const seenByThem = () => !!(S.state && S.state.tour_seen);
+    // The disclaimer comes first: it is fetched after sign-in, so its veil may
+    // not exist yet when the map closes. Wait until this session has
+    // acknowledged it (showBetaNotice records that against the session).
+    const disclaimerDone = () => {
+      const token = sessionToken();
+      if (!token) return true;
+      try { return (localStorage.getItem("gaius.beta") || "").startsWith(token + "|"); }
+      catch (e) { return true; }
+    };
     let timer = null;
+    let offered = false;
     const offer = () => {
-      if (!signedIn() || covered()) return;    // not in yet; wait
+      if (offered || !signedIn() || covered() || !disclaimerDone()) return;    // not in yet; wait
+      offered = true;
       document.removeEventListener("click", offer);
       clearInterval(timer);
-      setTimeout(() => { if (signedIn() && !covered()) window.startTour(true); }, 400);
+      if (seenByThem()) {
+        try { localStorage.setItem("scdes.tour", "seen"); } catch (e) {}
+        return;
+      }
+      setTimeout(() => {
+        if (!signedIn() || covered() || seenByThem()) return;
+        window.startTour(true);
+        post("/api/me/tour-seen", {}).catch(() => {});
+        if (S.state) S.state.tour_seen = true;
+      }, 400);
     };
     document.addEventListener("click", offer);
-    timer = setInterval(offer, 1000);
+    // The timer runs only once somebody is signed in — from here on a
+    // reload, or from signInAs after a code — and stops once the tour is
+    // offered. It used to tick every second for every visitor, forever,
+    // including on the home page where there is nothing to offer.
+    const soon = () => { if (!timer && !offered) timer = setInterval(offer, 1000); };
+    window.offerTourSoon = soon;
+    if (signedIn()) soon();
     offer();
   }
 })();

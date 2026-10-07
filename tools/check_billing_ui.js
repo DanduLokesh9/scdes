@@ -21,6 +21,7 @@
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
 const path = require("path");
+const { harnessSession } = require("./_jsdom_boot");
 
 const WEB = path.join(__dirname, "..", "app", "web");
 const read = (p) => fs.readFileSync(path.join(WEB, p), "utf8");
@@ -54,6 +55,9 @@ function store(seed = {}) {
 }
 
 async function boot() {
+  // Raising an order is a change, and changes need a proven sign-in
+  // (server._proven_session_gate) — without one the order is refused.
+  const session = await harnessSession();
   const dom = new JSDOM(read("index.html"), {
     runScripts: "outside-only", pretendToBeVisual: true, url: BASE + "/",
   });
@@ -66,9 +70,10 @@ async function boot() {
   Object.defineProperty(window, "localStorage", {
     value: store({ "scdes.registration": JSON.stringify(
       { email: HARNESS_EMAIL, name: "Automated walk", verified: true,
-        state: "SC", agency: HARNESS_AGENCY, abbrev: "HARNESS" }),
+        state: "SC", agency: HARNESS_AGENCY, abbrev: "HARNESS",
+        unlisted: true, agencyName: "GAIUS harness" }),
       "scdes.welcomeSeen": "1", "scdes.tour": "seen",
-      "scdes.portal": "government" }), writable: true });
+      "scdes.portal": "government", "scdes.session": session }), writable: true });
   Object.defineProperty(window, "sessionStorage",
     { value: store(), writable: true });
   window.confirm = () => true;
@@ -157,15 +162,20 @@ async function main() {
   check("what it covers is read from the rail, not a second list",
     modules === paidRail && modules > 0, `${modules} listed, ${paidRail} paid`);
 
-  console.log("\nthe two routes");
-  check("the invoice route is offered first",
-    said().indexOf("Purchase order and invoice") < said().indexOf("Card"),
-    "how public bodies actually buy");
-  check("and it is actionable", !!doc.querySelector("#blInvoice"),
-    (doc.querySelector("#blInvoice") || {}).textContent);
-  check("the card route says why it cannot be used yet",
-    !doc.querySelector("#blCard") && /not switched on/.test(said()),
-    "no provider configured");
+  console.log("\nhow to buy it");
+  // Since Oct 2026 the page offers one route: card, through Stripe's Buy
+  // Button (tools/check_stripe_ui.js walks it). The purchase-order-and-
+  // invoice block and the test-mode note were taken off at the team's request.
+  check("the card route offers Stripe",
+    !!doc.querySelector("#blCard") && /Stripe/.test(said()),
+    "Stripe Buy Button");
+  // The "How to buy it" panel only: an invoice order IIA raised can still
+  // be listed under "Your orders", by its route's name.
+  const buying = () => ([...doc.querySelectorAll("#view .panel")]
+    .find((p) => /How to buy it/.test(p.textContent)) || {}).textContent || "";
+  check("the purchase-order route is no longer offered",
+    !doc.querySelector("#blInvoice") && !/Purchase order/.test(buying()));
+  check("and no test-mode note is shown", !/Test mode/.test(buying()));
 
   console.log("\nnothing on this page collects a card");
   const fields = [...doc.querySelectorAll("#view input, #view select, "
@@ -179,10 +189,17 @@ async function main() {
     `${fields.length} field(s) on the page, none of them an instrument`);
 
   console.log("\nasking to buy does not open what is being bought");
-  doc.querySelector("#blInvoice").click();
-  await until(() => /Your orders/.test(said()));
-  check("the order is recorded", /Your orders/.test(said()));
-  check("and it is pending, not paid", /pending/.test(said()),
+  const cards = async () => ((await get("/api/billing")).orders || [])
+    .filter((o) => o.route === "card");
+  const before = (await cards()).length;
+  doc.querySelector("#blCard").click();
+  check("pressing Pay by card raises an order",
+    await until(() => /is raised/.test(said())));
+  const raised = await cards();
+  check("the order is recorded", raised.length >= 1,
+    `${before} card order(s) before, ${raised.length} after`);
+  check("and it is pending, not paid",
+    raised.length > 0 && raised.every((o) => o.state === "pending"),
     "an order grants nothing until it is settled");
 
   const after = await get("/api/state");
@@ -195,12 +212,12 @@ async function main() {
 
   console.log("\nasking twice does not raise two orders");
   await window.go("billing");
-  await until(() => !!doc.querySelector("#blInvoice"));
-  doc.querySelector("#blInvoice").click();
-  await settle(900);
-  const mine = await get("/api/billing");
-  check("one order, not two", (mine.orders || []).length === 1,
-    `${(mine.orders || []).length} order(s)`);
+  await until(() => !!doc.querySelector("#blCard"));
+  doc.querySelector("#blCard").click();
+  await until(() => /is raised/.test(said()));
+  const again = await cards();
+  check("one order, not two", again.length === raised.length,
+    `${again.length} card order(s)`);
 
   console.log(`\nerrors             : ${errors.length ? errors.join("; ") : "none"}`);
   if (errors.length) failures.push("script errors");

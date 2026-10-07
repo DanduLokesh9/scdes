@@ -536,24 +536,155 @@ def webhook_secret() -> str:
     return os.environ.get("BILLING_WEBHOOK_SECRET", "").strip()
 
 
+# ------------------------------------------------------------------- Stripe
+#
+# The card route is Stripe's hosted Buy Button (Oct 2026, from IIA's CFO).
+# The button and its publishable key are meant to sit in a public page — the
+# publishable key cannot move money — so the test-mode pair is the default
+# here and the live pair goes in the server's environment. The secret that
+# matters is the webhook signing secret (STRIPE_WEBHOOK_SECRET), which never
+# appears in code: with it set, a payment marks its order paid by itself;
+# without it, the GAIUS team marks it paid on Admin → Subscriptions with the
+# Stripe payment reference, exactly as an invoice is settled.
+
+STRIPE_TEST_KEY = ("pk_test_51UKoO0KITswac9b9tccm0Tzc0vCOBspq3x6c0lPK27H1hWTx2S7bhRMiRV8IDFsk"
+                   "iK75n9zs4IYjgSWpbPh7lcam003aMq1WJx")
+STRIPE_TEST_BUTTON = "buy_btn_1UNEctKITswac9b9eDukGnjt"
+STRIPE_TEST_LINK = "https://buy.stripe.com/test_fZubJ22AegB5doFaWRa3u00"
+
+
+def stripe() -> dict[str, Any]:
+    """What the Subscription page needs to show the Buy Button. No secrets."""
+    if os.environ.get("STRIPE_OFF", "").strip() in ("1", "true", "yes"):
+        return {"available": False}
+    key = os.environ.get("STRIPE_PUBLISHABLE_KEY", "").strip() or STRIPE_TEST_KEY
+    button = os.environ.get("STRIPE_BUY_BUTTON_ID", "").strip() or STRIPE_TEST_BUTTON
+    link = os.environ.get("STRIPE_PAYMENT_LINK", "").strip() or STRIPE_TEST_LINK
+    return {"available": bool(key and button), "publishable_key": key,
+            "buy_button_id": button, "payment_link": link,
+            "test_mode": key.startswith("pk_test_"),
+            "confirms_itself": bool(stripe_webhook_secret())}
+
+
+def stripe_webhook_secret() -> str:
+    return os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
+
+
 def card_route_ready() -> bool:
     """Whether the card route can work at all.
 
-    Both halves are needed: something to create a checkout with, and
-    something to verify the confirmation that comes back. A deployment with a
-    key and no webhook secret could take money and never learn that it had,
-    which is worse than not offering the route.
+    Both halves are needed: something to take the payment with, and a way to
+    learn that it happened. Stripe's Buy Button is the first; the second is
+    Stripe's signed webhook where its secret is set, and otherwise the GAIUS
+    team, who settle a card order from the Stripe payment reference the way
+    they settle an invoice. A key with neither would take money without the
+    application ever knowing — which is worse than not offering the route.
     """
+    if stripe()["available"]:
+        return True
     return bool(os.environ.get("BILLING_PROVIDER_KEY", "").strip()
                 and webhook_secret())
+
+
+def stripe_verify(raw: bytes, header: str, *, now: float | None = None) -> tuple[bool, str]:
+    """Stripe's own signature: `Stripe-Signature: t=<time>,v1=<hex>[,v1=…]`,
+    an HMAC-SHA256 of "<time>.<raw body>" under the webhook signing secret.
+    Over the raw bytes, within the replay window, in constant time."""
+    secret = stripe_webhook_secret()
+    if not secret:
+        return False, "No Stripe webhook secret is configured on this server."
+    parts: dict[str, list[str]] = {}
+    for item in str(header or "").split(","):
+        k, _, v = item.strip().partition("=")
+        if k and v:
+            parts.setdefault(k, []).append(v)
+    stamp = (parts.get("t") or [""])[0]
+    if not stamp or not parts.get("v1"):
+        return False, "The request carried no Stripe signature."
+    try:
+        drift = abs((now if now is not None else time.time()) - int(stamp))
+    except ValueError:
+        return False, "The signature timestamp is not a number."
+    if drift > SIGNATURE_WINDOW_SECONDS:
+        return False, f"The signature is {int(drift)} seconds old."
+    expected = hmac.new(secret.encode(), stamp.encode() + b"." + raw, hashlib.sha256).hexdigest()
+    if not any(hmac.compare_digest(expected, v) for v in parts["v1"]):
+        return False, "The signature does not match."
+    return True, ""
+
+
+#: The Stripe events acted on — an allowlist, as for any provider.
+STRIPE_EVENTS = {
+    "checkout.session.completed": PAID,
+    "checkout.session.async_payment_succeeded": PAID,
+    "checkout.session.async_payment_failed": FAILED,
+    "checkout.session.expired": EXPIRED,
+}
+
+
+def stripe_event(raw: bytes, header: str) -> dict[str, Any]:
+    """One verified Stripe event, applied at most once. The order is the
+    `client_reference_id` the Subscription page gave the Buy Button; the
+    amount Stripe took has to match the order's where a price is set."""
+    ok, why = stripe_verify(raw, header)
+    if not ok:
+        return {"ok": False, "error": why, "verified": False}
+    try:
+        event = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return {"ok": False, "error": "That is not a JSON body."}
+    event_id = str(event.get("id") or "").strip()
+    kind = str(event.get("type") or "").strip()
+    if not event_id:
+        return {"ok": False, "error": "The event carried no id."}
+    with _LOCK:
+        held = _read()
+        if event_id in (held.get("events") or {}):
+            return {"ok": True, "duplicate": True, "event": event_id}
+        held.setdefault("events", {})[event_id] = {"type": kind, "at": _now(), "provider": "stripe"}
+        _write(held)
+    if kind not in STRIPE_EVENTS:
+        return {"ok": True, "ignored": True, "type": kind}
+
+    session = ((event.get("data") or {}).get("object") or {})
+    order_id = str(session.get("client_reference_id") or "").strip()
+    order = (_read().get("orders") or {}).get(order_id)
+    if not order:
+        _record("stripe_payment_unmatched", None,
+                {"event": event_id, "client_reference_id": order_id,
+                 "email": str((session.get("customer_details") or {}).get("email") or "")[:200]})
+        return {"ok": False, "error": f"No order {order_id!r} for this payment.", "unmatched": True}
+
+    wanted = STRIPE_EVENTS[kind]
+    if wanted == PAID and kind == "checkout.session.completed" \
+            and session.get("payment_status") not in ("paid", "no_payment_required"):
+        return {"ok": True, "waiting": True, "status": session.get("payment_status")}
+    paid = None
+    if wanted == PAID:
+        try:
+            paid = round(int(session.get("amount_total") or 0) / 100, 2)
+        except (TypeError, ValueError):
+            paid = None
+        if order.get("amount_set"):
+            if paid != round(float(order.get("amount") or 0), 2):
+                _record("webhook_amount_mismatch", None,
+                        {"order": order_id, "claimed": paid, "expected": order.get("amount")})
+                return {"ok": False, "error": "The amount does not match the order."}
+            if str(session.get("currency") or "").upper() != str(order.get("currency") or "").upper():
+                return {"ok": False, "error": "The currency does not match the order."}
+    return mark(order_id, wanted, None, why=f"Stripe {kind}",
+                reference=str(session.get("payment_intent") or session.get("id") or "")[:120],
+                amount=paid)
 
 
 def card_route_note() -> str:
     """Why the card route is unavailable, in words for a screen."""
     if card_route_ready():
         return ""
+    # The purchase-order route is no longer offered on the page (Oct 2026),
+    # so this does not send anyone to it.
     return ("Paying by card is not switched on here yet. "
-            "Raise a purchase order instead, or ask us to invoice you.")
+            "Please contact the GAIUS team and we will help you subscribe.")
 
 
 def verify(raw: bytes, signature: str, timestamp: str) -> tuple[bool, str]:
@@ -687,6 +818,8 @@ def listing(agency: str) -> dict[str, Any]:
         "routes": ROUTES,
         "card_ready": card_route_ready(),
         "card_note": card_route_note(),
+        # The Buy Button's public settings — no secret is ever in here.
+        "stripe": stripe(),
         "override": deployment_override(),
         # Only this agency's orders. The register is shared; the view is not.
         "orders": [_for_screen(o) for o in mine[:20]],

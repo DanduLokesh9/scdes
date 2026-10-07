@@ -66,6 +66,12 @@ def session_for(base: str, email: str = HARNESS_EMAIL,
     never issued, which produced five false failures — two of them on the
     security check — before anyone noticed the harness was testing itself.
     """
+    # The harness accepts the Terms of Use like anybody else: registering
+    # needs it, and so does any write once signed in.
+    _post(base, "/api/terms/accept", {
+        "email": email, "name": "Automated walk", "title": "Harness",
+        "unit": "GAIUS harness", "agency": agency,
+        "authority": True, "scrolled": True})
     asked = _post(base, "/api/agency/signin", {"email": email})
     if not asked.get("code"):
         asked = _post(base, "/api/agency/register", {

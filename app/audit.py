@@ -245,7 +245,19 @@ class OrganisationLog:
         return JsonlAuditLog(where) if where else None
 
     def append(self, **kwargs: Any) -> Entry:
-        from app import tenant
+        from app import impersonate, tenant
+        # A GAIUS admin viewing as somebody (app/impersonate.py) leaves no
+        # mark on that organization: anything recorded while viewing goes to
+        # the back-end copy only, saying who was viewing. Nothing reaches the
+        # organization's own History, and nothing is written in their name.
+        viewing = impersonate.current()
+        if viewing:
+            copy = dict(kwargs)
+            copy["detail"] = {**(kwargs.get("detail") or {}),
+                              "organisation": tenant.current() or "",
+                              "while_viewing_as": viewing["email"],
+                              "viewed_by": viewing["admin"]}
+            return JsonlAuditLog(DEFAULT_LOG).append(**copy)
         own = self._own()
         written = own.append(**kwargs) if own else None
         if own is None or own.path.resolve() != DEFAULT_LOG.resolve():

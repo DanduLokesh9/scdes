@@ -18,6 +18,7 @@
        $env:IIA_SUBSCRIPTION = "1"; node tools/check_vendors_ui.js
 */
 
+const { harnessSession } = require("./_jsdom_boot");
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
 const path = require("path");
@@ -69,7 +70,9 @@ async function boot() {
       { email: HARNESS_EMAIL, name: "Automated walk", verified: true,
         state: "SC", agency: HARNESS_AGENCY, abbrev: "HARNESS" }),
       "scdes.welcomeSeen": "1", "scdes.tour": "seen",
-      "scdes.portal": "government" }), writable: true });
+      "scdes.portal": "government",
+      // Signed in for real: changes need a proven session now.
+      "scdes.session": await harnessSession() }), writable: true });
   Object.defineProperty(window, "sessionStorage",
     { value: store(), writable: true });
   window.confirm = () => true;
@@ -121,8 +124,10 @@ async function main() {
   const said = () => doc.getElementById("view").textContent.replace(/\s+/g, " ");
 
   const auth = `user=sean.ot&email=${encodeURIComponent(HARNESS_EMAIL)}`;
+  // With the harness's own sign-in: changes need a proven session now.
   const post = (p, body) => window.fetch(`${p}?${auth}`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json",
+      "X-GAIUS-Session": window.localStorage.getItem("scdes.session") || "" },
     body: JSON.stringify(body) });
   const get = async (p) => (await window.fetch(`${p}?${auth}`)).json();
 

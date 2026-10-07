@@ -37,7 +37,10 @@ async function main() {
   const host = doc.createElement("div"); doc.body.appendChild(host);
   host.appendChild(window.peoplePanel({ ok: true, is_admin: true, me: "brett.butz@des.sc.gov", domain: "des.sc.gov", admin_names: ["Brett Butz"], people },
     "South Carolina Department of Environmental Services"));
-  const panel = () => doc.getElementById("peoplePanel");
+  // The panel this walk draws, not the one on Home — signed in for real, the
+  // Home screen draws its own people panel too, with the same field ids.
+  [...doc.querySelectorAll("#peoplePanel")].filter((n) => !host.contains(n)).forEach((n) => n.remove());
+  const panel = () => host.querySelector("#peoplePanel");
   check("everybody is listed", /Brett Butz/.test(panel().textContent) && /lokesh dandu/.test(panel().textContent));
   check("with their addresses", /lokesh\.dandu@des\.sc\.gov/.test(panel().textContent));
   check("the form is there", !!doc.getElementById("apName") && !!doc.getElementById("apGo"));

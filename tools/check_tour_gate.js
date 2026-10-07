@@ -13,7 +13,7 @@
        node tools/check_tour_gate.js
 */
 
-const { boot, settle, until, reporter } = require("./_jsdom_boot");
+const { boot, settle, until, reporter, harnessSession } = require("./_jsdom_boot");
 
 async function walk(storage) {
   // jsdom lays nothing out, so every element measures 0×0 and the tour — which
@@ -23,6 +23,18 @@ async function walk(storage) {
   const before = (window) => {
     window.Element.prototype.getBoundingClientRect = () =>
       ({ x: 0, y: 0, top: 0, left: 0, width: 120, height: 24, right: 120, bottom: 24 });
+    // "First use" is remembered per person on the server, and the harness has
+    // had the tour in earlier runs — so this walk presents somebody who has
+    // not, and holds the note that they now have.
+    const real = window.fetch;
+    window.fetch = async (url, opts) => {
+      const u = String(url);
+      if (u.includes("/api/me/tour-seen")) return { ok: true, status: 200, json: async () => ({ ok: true }) };
+      const r = await real(url, opts);
+      if (!u.includes("/api/state")) return r;
+      const body = await r.json();
+      return { ok: r.ok, status: r.status, json: async () => ({ ...body, tour_seen: false }) };
+    };
   };
   const { window, errors } = await boot({ storage, before });
   let opened = 0, was = false;
@@ -53,13 +65,22 @@ async function main() {
     fresh.started() === 0, `started ${fresh.started()}`);
 
   console.log("\nsigned in");
+  const SESSION = await harnessSession();
   const inside = await walk({
     // The harness's own container, as every other walk signs in — minus the
     // "tour already seen" the default storage carries.
     "scdes.registration": JSON.stringify({ email: "walk@harness.gaius.test",
       name: "Automated walk", verified: true, state: "SC", agency: "gaius.harness",
-      abbrev: "HARNESS" }),
-    "scdes.welcomeSeen": "1", "scdes.portal": "government" });
+      abbrev: "HARNESS",
+      // The harness is on no state's list, so it is described the way an
+      // unlisted unit is — otherwise resuming the session cannot place it and
+      // the home page is shown instead, which is right for a real person.
+      unlisted: true, agencyName: "GAIUS harness" }),
+    "scdes.welcomeSeen": "1", "scdes.portal": "government",
+    // Signed in for real: a remembered address alone now goes to Log in.
+    "scdes.session": SESSION,
+    // And this sign-in has acknowledged the disclaimer, which comes first.
+    "gaius.beta": `${SESSION}|seen` });
   const d2 = inside.window.document;
   d2.getElementById("launcher").hidden = true;
   d2.body.classList.remove("launcher-open");

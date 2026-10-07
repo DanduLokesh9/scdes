@@ -32,7 +32,26 @@ function check(label, ok, detail) {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (n) => ((n && n.textContent) || "").replace(/\s+/g, " ").trim();
 
+/* A real sign-in for a tester address in IIA's own DEMO organization.
+   This walk used an address on no organization, so the projects it created
+   were filed under none — the very thing the server now refuses. */
+const TESTER = "forms.check@iiac.ai";
+async function testerSession() {
+  const post = (p, b) => fetch(BASE + p, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.json());
+  await post("/api/terms/accept", { email: TESTER, name: "Forms check", title: "Harness",
+    unit: "DEMO agency", agency: "iia.test", authority: true, scrolled: true });
+  let asked = await post("/api/agency/signin", { email: TESTER });
+  if (!asked.code) asked = await post("/api/agency/register", { agency: "iia.test",
+    name: "Forms check", title: "Harness", email: TESTER, attested: true });
+  if (!asked.code) throw new Error(`no code for ${TESTER}: ${asked.error || "refused"}`);
+  const done = await post("/api/agency/verify", { email: TESTER, code: asked.code });
+  if (!done.session) throw new Error(`could not verify ${TESTER}: ${done.error || "no session"}`);
+  return done.session;
+}
+
 async function main() {
+  const session = await testerSession();
   const dom = new JSDOM(read("index.html"), {
     runScripts: "outside-only", pretendToBeVisual: true, url: BASE + "/",
   });
@@ -43,7 +62,9 @@ async function main() {
   };
   window.matchMedia = () => ({ matches: false, addEventListener() {} });
   const mem = { "scdes.registration":
-                JSON.stringify({ email: `forms.check.${Date.now()}@iiac.ai` }) };
+                JSON.stringify({ email: TESTER, name: "Forms check", verified: true,
+                                 state: "SC", agency: "iia.test", abbrev: "DEMO" }),
+                "scdes.session": session, "scdes.welcomeSeen": "1", "scdes.tour": "seen" };
   Object.defineProperty(window, "localStorage", { value: {
     getItem: (k) => (k in mem ? mem[k] : null),
     setItem: (k, v) => { mem[k] = String(v); },

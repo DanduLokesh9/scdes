@@ -17,6 +17,7 @@
        $env:IIA_SUBSCRIPTION = "1"; node tools/check_holdings_ui.js
 */
 
+const { harnessSession } = require("./_jsdom_boot");
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
 const path = require("path");
@@ -68,7 +69,9 @@ async function boot() {
       { email: HARNESS_EMAIL, name: "Automated walk", verified: true,
         state: "SC", agency: HARNESS_AGENCY, abbrev: "HARNESS" }),
       "scdes.welcomeSeen": "1", "scdes.tour": "seen",
-      "scdes.portal": "government" }), writable: true });
+      "scdes.portal": "government",
+      // Signed in for real: changes need a proven session now.
+      "scdes.session": await harnessSession() }), writable: true });
   Object.defineProperty(window, "sessionStorage",
     { value: store(), writable: true });
   window.confirm = () => true;
@@ -120,7 +123,9 @@ async function main() {
 
   const post = (path, body) => window.fetch(
     `${path}?user=sean.ot&email=${encodeURIComponent(HARNESS_EMAIL)}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      // With the harness's own sign-in: changes need a proven session now.
+      method: "POST", headers: { "Content-Type": "application/json",
+        "X-GAIUS-Session": window.localStorage.getItem("scdes.session") || "" },
       body: JSON.stringify(body) });
 
   // Start clean, so counts mean something.

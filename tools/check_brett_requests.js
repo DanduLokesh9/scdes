@@ -102,32 +102,40 @@ async function main() {
   click(window, door);
   await wait(300);
   const heading = text(doc.getElementById("signinTitle"));
-  check("the form opens", !!doc.getElementById("unUnit"));
+  // Since Oct 2026 this is Brett's agreement card (launcher.js,
+  // showTermsCard): the Terms, then the person and their unit.
+  check("the form opens", !!doc.getElementById("tcUnit") && !!doc.getElementById("termsBody"));
   check("its heading is not the state's own agency",
         !/Texas Commission/.test(heading), heading);
-  const hint = doc.getElementById("unUnit").getAttribute("aria-describedby");
-  check("the name field's help is tied to it", hint === "unUnitHint");
-  check("it says plainly that no domain is checked",
-        /no\s+email domain is required/.test(text(doc.getElementById("signinPanel"))));
+  check("the unit's name is theirs to type", !doc.getElementById("tcUnit").readOnly);
+  check("and no email domain is asked for",
+        !/must end in @/.test(text(doc.getElementById("signinPanel"))));
 
   // A listed agency's name is refused and pointed at the list.
-  const fill = (id, v) => { doc.getElementById(id).value = v; };
-  fill("unUnit", "Texas Commission on Environmental Quality");
-  fill("unName", "Jane Doe"); fill("unTitle", "General Manager");
+  const fill = (id, v) => {
+    const f = doc.getElementById(id);
+    f.value = v; f.dispatchEvent(new window.Event("input"));
+  };
+  const body = doc.getElementById("termsBody");
+  body.scrollTop = 1; body.dispatchEvent(new window.Event("scroll"));
+  fill("tcUnit", "Texas Commission on Environmental Quality");
+  fill("tcName", "Jane Doe"); fill("tcTitle", "General Manager");
   const email = `jane.doe.${Date.now()}@example.test`;
-  fill("unEmail", email); fill("unPhone", "713-555-0100");
-  doc.getElementById("unAttest").checked = true;
-  click(window, doc.getElementById("unGo"));
-  await wait(700);
-  const refusal = text(doc.getElementById("unError"));
+  fill("tcEmail", email);
+  click(window, doc.getElementById("tcAuth"));
+  await wait(100);
+  click(window, doc.getElementById("tcGo"));
+  await wait(900);
+  const refusal = text(doc.getElementById("tcError"));
   check("a listed agency's name is refused", /on our list/.test(refusal),
         refusal.slice(0, 70));
 
   // A real unlisted unit goes through, to the code screen.
   const unit = `Harris County MUD No. ${String(Date.now()).slice(-4)}`;
-  fill("unUnit", unit);
-  click(window, doc.getElementById("unGo"));
-  await wait(900);
+  fill("tcUnit", unit);
+  await wait(50);
+  click(window, doc.getElementById("tcGo"));
+  await wait(1200);
   const codeBox = doc.getElementById("verCode");
   check("it reaches the verification code", !!codeBox,
         text(doc.querySelector(".signin-lede")).slice(0, 60));
@@ -139,12 +147,9 @@ async function main() {
     codeBox.value = shown;
     click(window, doc.getElementById("verGo"));
     await wait(1200);
-    // The NDA stands between verifying and the product, for everybody.
-    const accept = doc.getElementById("ndaYes");
-    if (accept) {
-      click(window, accept);
-      await wait(1500);
-    }
+    // The Terms stand between verifying and the product. Accepted on the
+    // card before the code was sent, so nothing more is asked here.
+    await wait(800);
     const short = text(doc.getElementById("agencyShort"));
     const crumb = text(doc.getElementById("agencyCrumb"));
     check("the header names the unit, not the state's agency",

@@ -44,6 +44,9 @@ async function post(path, body) {
 async function mint(email) {
   let asked = await post("/api/agency/signin", { email });
   if (!asked.code) {
+    // Registering needs the Terms of Use accepted first, by anybody.
+    await post("/api/terms/accept", { email, name: "Rail check", title: "Harness",
+      unit: "DEMO agency", agency: "iia.test", authority: true, scrolled: true });
     asked = await post("/api/agency/register", {
       agency: "iia.test", name: "Rail check", title: "Harness",
       email, phone: "(843) 555 0100", attested: true });

@@ -31,6 +31,10 @@ def sandbox(tmp_path, monkeypatch):
     monkeypatch.setattr(tenancy, "STORE", tmp_path / "tenancy.json")
     monkeypatch.setattr(techreport, "stalled", lambda now: [])
     monkeypatch.setattr(techreport, "refusals", lambda since: [])
+    monkeypatch.setattr(techreport, "REFUSED", tmp_path / "refused.jsonl")
+    monkeypatch.setattr(techreport, "HOLDING", tmp_path / "holding")
+    monkeypatch.setattr(techreport, "integrity_alarms", lambda since: [])
+    monkeypatch.setattr(techreport, "frameworks_reached", lambda already=None: [])
     for name in ("GAIUS_REPORT_TO", "GAIUS_REPORT_HOUR", "GAIUS_REPORT_OFF"):
         monkeypatch.delenv(name, raising=False)
     sent = []

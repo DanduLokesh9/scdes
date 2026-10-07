@@ -370,9 +370,16 @@ def progress_of(agency: str) -> dict[str, Any]:
 
 def agencies(everyone: list[Person]) -> list[dict[str, Any]]:
     """Each agency using the product, with where it is and how far it has got."""
+    from app import tenant
     seen: dict[str, dict[str, Any]] = {}
     for person in everyone:
         for agency in person.agencies:
+            # "~unresolved" is not an organization: it is where a request with
+            # nobody behind it was filed. Shown as a row it read as an agency
+            # with work in it. Anything landing there now raises an alarm in
+            # the daily technical report instead (app/techreport.py).
+            if agency == tenant.ANONYMOUS:
+                continue
             state, label = _state_of(agency)
             row = seen.setdefault(agency, {
                 "agency": agency, "state": state, "name": label,

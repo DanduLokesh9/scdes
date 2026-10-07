@@ -175,6 +175,33 @@ def _own_organization() -> dict[str, str]:
     return {"code": here, "label": label}
 
 
+def _session_expires() -> str:
+    try:
+        from app import impersonate
+        return tenancy.session_expires(impersonate.session())
+    except Exception:                                         # noqa: BLE001
+        return ""
+
+
+def api_session_renew(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    """"Stay signed in." Reaching here at all renews the session (see
+    tenancy.session_email); this reports the new end."""
+    return {"ok": bool(actor.email), "session_expires": _session_expires()}
+
+
+def _tour_seen(email: str) -> bool:
+    try:
+        from app import firstuse
+        return firstuse.tour_seen(email)
+    except Exception:                                         # noqa: BLE001
+        return False
+
+
+def _impersonating() -> dict[str, Any] | None:
+    from app import impersonate
+    return impersonate.public(impersonate.current())
+
+
 def api_state(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
     from app import decider as decider_mod, tenant, vocabulary
     provider = get_provider()
@@ -207,6 +234,15 @@ def api_state(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
         # proven address for itself, because a hidden menu item is decoration
         # and this one guards other agencies' reports.
         "admin": admin.is_admin(actor.email),
+        # Set only while a GAIUS admin is viewing as somebody. The screen
+        # draws the "Viewing as … — End impersonation" bar from it.
+        "impersonating": _impersonating(),
+        # Whether this person has had the guided tour (app/firstuse.py), so it
+        # is shown on first use only, whichever browser they use.
+        "tour_seen": _tour_seen(actor.email),
+        # When this sign-in ends, renewals included — the screen warns before
+        # it does. Empty when nothing is proved.
+        "session_expires": _session_expires(),
         # The organization this request is actually served from — the one
         # the signed-in address belongs to. The shell compares it with the
         # agency picked on the map and says so where they differ. Only the
@@ -1970,8 +2006,157 @@ def api_whose_container(actor: Actor, body: dict,
     }
 
 
+# ------------------------------------------------- the Terms of Use (app/terms.py)
+
+#: Writes allowed before the Terms of Use are accepted: getting in, accepting,
+#: asking for the signed form, reporting a fault, and leaving.
+TERMS_EXEMPT = {"/api/terms/accept", "/api/terms/signed", "/api/session/end",
+                "/api/bugs/report", "/api/register"}
+TERMS_EXEMPT_PREFIXES = ("/api/agency/", "/api/nda/")
+
+
+def _terms_gate(method: str, path: str, actor: Actor,
+                viewing: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Refuse a change from a signed-in person who has not accepted the Terms.
+
+    The agreement used to be a gate in the browser only — the server never
+    asked, and Escape on the agreement screen closed it. Writes are checked
+    here now. The GAIUS team's own addresses are exempt (IIA does not agree
+    to its own terms), and so is a View as session, which writes nothing."""
+    if method != "POST" or viewing or not actor.email:
+        return None
+    if path in TERMS_EXEMPT or path.startswith(TERMS_EXEMPT_PREFIXES):
+        return None
+    from app import admin, terms
+    if admin.is_admin(actor.email) or tenancy.is_tester(actor.email):
+        return None
+    if terms.status(actor.email)["accepted"]:
+        return None
+    return {"ok": False, "needs_terms": True,
+            "error": "Accept the Terms of Use to continue."}
+
+
+def _open_door(path: str) -> bool:
+    """Writes that need no signed-in session: getting in, the Terms, reporting
+    a fault, signing out, and the search box (which writes nothing)."""
+    return (path in TERMS_EXEMPT or path.startswith(TERMS_EXEMPT_PREFIXES)
+            or path == "/api/chat")
+
+
+SESSION_ENDED = "Your session ended — sign in again. That change was not saved."
+
+
+def _proven_session_gate(method: str, path: str, actor: Actor,
+                         params: dict) -> dict[str, Any] | None:
+    """Every change comes from a proven sign-in.
+
+    A request without a valid session token used to fall back to whatever
+    address the browser claimed (`_caller_agency`), kept for browsers signed
+    in before tokens existed. That fallback is how a tab whose session had
+    gone kept writing — and anybody who knew a member's address could have
+    written into their organization. Reads still fall back, so an old browser
+    can see where it is; changes no longer do."""
+    if method != "POST" or actor.email or _open_door(path):
+        return None
+    claimed = (params.get("email", [""])[0] or "").strip().lower()
+    _note_refused(claimed, path, "no signed-in session")
+    return {"ok": False, "session_ended": True, "error": SESSION_ENDED}
+
+
+def _note_refused(claimed: str, path: str, why: str) -> None:
+    """Kept for the development team's daily report (app/techreport.py)."""
+    try:
+        from app import techreport
+        org = tenancy.access_for(claimed).get("state", "") if claimed else ""
+        techreport.note_refused_save(claimed, org, path, why)
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
+def _no_organization_gate(method: str, path: str) -> dict[str, Any] | None:
+    """Refuse a change that belongs to no organization.
+
+    A request this server cannot tie to an organization resolves to
+    `tenant.ANONYMOUS`, which reads as empty — and used to be written to as
+    well. On Sep 29 Rebecca Valencia answered 111 framework questions from a
+    browser that had lost its session; every one was saved, under no
+    organization, and her own framework showed 7. A change with nowhere to go
+    is refused now, and the screen says the session ended and asks her to
+    sign in again, instead of appearing to save. Getting in, the Terms,
+    reporting a fault and the search box (which writes nothing) stay open."""
+    if method != "POST" or _open_door(path):
+        return None
+    if tenant.current() != tenant.ANONYMOUS:
+        return None
+    _note_refused("", path, "signed in, but on no organization")
+    return {"ok": False, "session_ended": True, "error": SESSION_ENDED}
+
+
+def _needs_terms(email: str) -> dict[str, Any] | None:
+    """The refusal for a registration that has not accepted the Terms yet."""
+    from app import terms
+    if terms.may_register(email):
+        return None
+    if terms.status(email)["awaiting_signed"]:
+        return {"ok": False, "awaiting_signed": True,
+                "error": "Your registration is waiting for the signed Terms of Use. "
+                         "It continues once IIA has the executed copy back."}
+    return {"ok": False, "needs_terms": True,
+            "error": "Read and accept the Terms of Use first."}
+
+
+def api_terms(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    """The agreement, word for word, with where this address stands."""
+    from app import terms
+    email = params.get("email", [""])[0]
+    return {**terms.document(), "status": terms.status(email)}
+
+
+def api_terms_accept(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    from app import terms
+    def text(key: str, n: int = 200) -> str:
+        return str(body.get(key) or "")[:n]
+    return terms.accept(email=text("email"), name=text("name"), title=text("title"),
+                        unit=text("unit"), agency=text("agency", 120),
+                        authority=bool(body.get("authority")),
+                        scrolled=bool(body.get("scrolled")),
+                        user_agent=text("user_agent"), sha256=text("sha256", 80))
+
+
+def api_terms_signed(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    from app import terms
+    def text(key: str, n: int = 200) -> str:
+        return str(body.get(key) or "")[:n]
+    return terms.request_signed(email=text("email"), name=text("name"),
+                                title=text("title"), unit=text("unit"),
+                                agency=text("agency", 120))
+
+
+def api_admin_terms_received(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    """The GAIUS team has the executed signed form back."""
+    from app import terms
+    if not _platform(actor):
+        return _PLATFORM_ONLY
+    email = str(body.get("email", ""))[:200]
+    out = terms.mark_signed_received(email, actor.email)
+    if not out.get("ok"):
+        return out
+    return {**_organizations_view(),
+            "says": f"Signed Terms received for {email.strip().lower()}. They can get "
+                    f"their code now."}
+
+
+def api_tour_seen(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
+    """The guided tour has been shown to this person (app/firstuse.py)."""
+    from app import firstuse
+    return firstuse.mark_tour_seen(actor.email)
+
+
 def api_register_agency(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
     from app import tenancy
+    refused = _needs_terms(str(body.get("email", "")))
+    if refused:
+        return refused
     return tenancy.start_registration(
         agency=str(body.get("agency", "")), name=str(body.get("name", "")),
         title=str(body.get("title", "")), email=str(body.get("email", "")),
@@ -2004,6 +2189,9 @@ def api_register_unlisted(actor: Actor, body: dict,
     # what keeps `unlisted.create` from running on a form that will fail.
     if "@" not in email or email.startswith("@") or email.endswith("@"):
         return {"ok": False, "error": "That does not look like an email address."}
+    refused = _needs_terms(email)
+    if refused:
+        return refused
     if not attested:
         return {"ok": False,
                 "error": "You need to confirm you hold delegated authority to "
@@ -2070,6 +2258,10 @@ def api_verify_agency(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
     from app import tenancy
     out = tenancy.verify_code(str(body.get("email", "")),
                               str(body.get("code", "")))
+    if out.get("ok"):
+        # The address that accepted the Terms has now proved itself.
+        from app import terms
+        terms.confirm(str(body.get("email", "")))
     # A new organization waits for the GAIUS team to appoint its admin, so
     # the team is told the moment one exists.
     if out.get("ok") and out.get("needs_admin"):
@@ -2245,9 +2437,12 @@ _PLATFORM_ONLY = {"ok": False, "error": "This is for the GAIUS team."}
 def _organizations_view() -> dict[str, Any]:
     from app import tenancy
     orgs = tenancy.organizations()
+    from app import terms
     return {"ok": True, "organizations": orgs,
             "waiting": sum(1 for o in orgs if o["needs_admin"] and not o["test"]),
-            "pending": tenancy.pending_signups()}
+            "pending": tenancy.pending_signups(),
+            # Registrations paused for the signed Terms of Use.
+            "awaiting_signed": terms.awaiting_signed()}
 
 
 def api_admin_organizations(actor: Actor, body: dict, params: dict
@@ -2324,6 +2519,24 @@ def api_admin_pending_remove(actor: Actor, body: dict, params: dict
                    {"removed": email.strip().lower()}, agency=out["agency"])
     return {**_organizations_view(),
             "says": f"The sign-up for {out['removed']} is removed."}
+
+
+def api_admin_impersonate_start(actor: Actor, body: dict, params: dict
+                                ) -> dict[str, Any]:
+    """View as one of an organization's people — view only. See
+    app/impersonate.py. Keyed on this browser's own proven session."""
+    from app import impersonate
+    if not _platform(actor):
+        return _PLATFORM_ONLY
+    return impersonate.start(impersonate.session(), actor.email,
+                             str(body.get("email", ""))[:200])
+
+
+def api_admin_impersonate_stop(actor: Actor, body: dict, params: dict
+                               ) -> dict[str, Any]:
+    """End it. Allowed while viewing — it is the one write that is."""
+    from app import impersonate
+    return impersonate.stop(impersonate.session())
 
 
 def notify_needs_admin(agency: str, name: str, title: str, email: str) -> None:
@@ -2689,6 +2902,8 @@ def api_session_end(actor: Actor, body: dict, params: dict) -> dict[str, Any]:
     """Retire a session token. Unauthenticated by design: the only thing anyone
     can do with a token they hold is destroy it, and requiring proof to sign out
     would mean an expired session could not be cleaned up."""
+    from app import impersonate
+    impersonate.stop(str(body.get("session", "")))   # signing out ends it too
     tenancy.end_session(str(body.get("session", "")))
     return {"ok": True}
 
@@ -3573,6 +3788,14 @@ ROUTES: dict[tuple[str, str], Callable[..., dict[str, Any]]] = {
     ("POST", "/api/admin/member/role"): api_admin_member_role,
     ("POST", "/api/admin/member/remove"): api_admin_member_remove,
     ("POST", "/api/admin/pending/remove"): api_admin_pending_remove,
+    ("GET", "/api/terms"): api_terms,
+    ("POST", "/api/terms/accept"): api_terms_accept,
+    ("POST", "/api/terms/signed"): api_terms_signed,
+    ("POST", "/api/admin/terms/received"): api_admin_terms_received,
+    ("POST", "/api/me/tour-seen"): api_tour_seen,
+    ("POST", "/api/session/renew"): api_session_renew,
+    ("POST", "/api/admin/impersonate/start"): api_admin_impersonate_start,
+    ("POST", "/api/admin/impersonate/stop"): api_admin_impersonate_stop,
     ("GET", "/api/module"): api_module,
     ("GET", "/api/discretion"): api_discretion,
     ("GET", "/api/framework"): api_framework,
@@ -3754,7 +3977,8 @@ class Handler(BaseHTTPRequestHandler):
     sys_version = ""
 
     def log_message(self, fmt: str, *args: Any) -> None:      # quieter console
-        if "/api/" in (args[0] if args else ""):
+        # str(): send_error logs an HTTPStatus here, not the request line.
+        if "/api/" in (str(args[0]) if args else ""):
             return
         super().log_message(fmt, *args)
 
@@ -3797,6 +4021,20 @@ class Handler(BaseHTTPRequestHandler):
         cache = LONG_CACHE if path.startswith(LONG_CACHE_PREFIX) else "no-store"
         self._send(200, target.read_bytes(),
                    ctype or "application/octet-stream", cache)
+
+    def _stripe_webhook(self) -> None:
+        """Stripe's payment confirmation — see billing.stripe_event. The same
+        rules as the provider webhook below: raw bytes, no signed-in user, and
+        the status code is part of the protocol (200 when dealt with, 400 when
+        the signature is wrong, so Stripe retries a real one and not a forgery)."""
+        from app import billing
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > 256 * 1024:
+            self._json({"error": "That body is too large to be an event."}, 413)
+            return
+        raw = self.rfile.read(length) if length else b""
+        out = billing.stripe_event(raw, self.headers.get("Stripe-Signature", ""))
+        self._json(out, 200 if out.get("ok") or out.get("unmatched") else 400)
 
     def _webhook(self) -> None:
         """A provider's payment confirmation.
@@ -3874,6 +4112,9 @@ class Handler(BaseHTTPRequestHandler):
         if method == "POST" and parsed.path == "/api/billing/webhook":
             self._webhook()
             return
+        if method == "POST" and parsed.path == "/api/billing/stripe":
+            self._stripe_webhook()
+            return
 
         from app import public_report
         if parsed.path.startswith(public_report.PREFIX):
@@ -3905,6 +4146,20 @@ class Handler(BaseHTTPRequestHandler):
                     return
 
         actor = actor_for(params, self.headers)
+        # View as (app/impersonate.py). Only a GAIUS admin's own proven
+        # session can carry one; while it does, this request is answered as
+        # the person being viewed, in their organization, and writes are
+        # refused below. Nothing about the person's own sessions changes.
+        from app import impersonate
+        session_token = (params.get("session", [None])[0]
+                         or self.headers.get("X-GAIUS-Session") or "")
+        viewing = (impersonate.for_session(session_token, actor.email)
+                   if actor.email else None)
+        if viewing:
+            actor = replace(actor, email=viewing["email"],
+                            name=viewing["name"], title=viewing["title"])
+            params = {**params, "email": [viewing["email"]]}
+        seen = impersonate.set_current(viewing, session_token)
         # Bound for the life of this request only. Every module that reads the
         # agency's own governance state resolves its path through this — see
         # app/tenant.py — so a handler that forgets to ask still cannot be
@@ -3915,6 +4170,22 @@ class Handler(BaseHTTPRequestHandler):
         # east of UTC, from the browser; see app/clock.py.
         tick = clock.set_offset(self.headers.get("X-GAIUS-UTC-Offset"))
         try:
+            blocked = impersonate.refused(method, parsed.path)
+            if blocked:
+                self._json(blocked, 403)
+                return
+            unaccepted = _terms_gate(method, parsed.path, actor, viewing)
+            if unaccepted:
+                self._json(unaccepted, 403)
+                return
+            unproven = _proven_session_gate(method, parsed.path, actor, params)
+            if unproven:
+                self._json(unproven, 401)
+                return
+            nowhere = _no_organization_gate(method, parsed.path)
+            if nowhere:
+                self._json(nowhere, 401)
+                return
             self._json(route(actor, body, params))
         except KeyError as exc:
             self._json({"error": f"not found: {exc}"}, 404)
@@ -3929,6 +4200,7 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             clock.reset(tick)
             tenant.reset(token)
+            impersonate.reset(seen)
 
     def do_GET(self) -> None:      # noqa: N802
         self._dispatch("GET")

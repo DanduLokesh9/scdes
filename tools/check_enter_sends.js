@@ -51,12 +51,16 @@ async function main() {
   asked.length = 0;
   window.showRegister(entry, {});
   await settle(200);
-  const name = doc.getElementById("regName");
-  check("the register card is showing", !!name);
+  // Since Oct 2026 the register card is Brett's agreement form. Accepting a
+  // legal agreement is a deliberate press of Accept, once the text has been
+  // read — so Enter in a field must not do it, and sends nothing.
+  const name = doc.getElementById("tcName");
+  check("the register card is showing", !!name && !!doc.getElementById("termsBody"));
   enter(name);
   await settle(300);
-  check("Enter on the register card presses Register (and it checks the fields)",
-    !doc.getElementById("regError").hidden, doc.getElementById("regError").textContent.slice(0, 60));
+  check("Enter on the agreement card does not accept it, and sends nothing",
+    doc.getElementById("tcGo").disabled && !asked.some((u) => /terms\/accept|register/.test(u)),
+    asked.join(", "));
 
   console.log("\nthe agency picker");
   window.showMap();
@@ -113,12 +117,14 @@ async function main() {
     doc.getElementById("verBack").textContent.trim() === "Back");
   verifyAnswer = { ok: true, status: "active", session: "" };
   let wentIn = false;
-  const nda = window.showNda;
-  window.showNda = () => { wentIn = true; };
+  // A right code goes on to afterVerify — the Terms check, then in (it was
+  // the NDA step before the Terms replaced it).
+  const nda = window.afterVerify;
+  window.afterVerify = () => { wentIn = true; };
   type("654321");
   await settle(400);
   check("a right code goes straight in", verified.join() === "123456,654321" && wentIn, verified.join());
-  window.showNda = nda;
+  window.afterVerify = nda;
 
   finish(errors, "Enter presses the main button everywhere, and the code verifies itself");
 }

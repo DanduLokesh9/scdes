@@ -22,6 +22,13 @@ function refuseRemote() {
 }
 
 async function demandScratchContainer() {
+  // The harness accepts the Terms of Use like anybody else — registering
+  // needs it, and so does getting past the agreement when a walk resumes a
+  // signed-in session. Idempotent: accepting again records the same version.
+  await fetch(`${BASE}/api/terms/accept`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: HARNESS_EMAIL, name: "Automated walk", title: "Harness",
+      unit: "GAIUS harness", agency: HARNESS_AGENCY, authority: true, scrolled: true }) });
   const url = `${BASE}/api/whose-container?email=${encodeURIComponent(HARNESS_EMAIL)}`;
   let found = await (await fetch(url)).json();
   if (!found.safe_to_overwrite) {
@@ -45,9 +52,27 @@ function store(seed = {}) {
            removeItem: (k) => { delete d[k]; } };
 }
 
+/* A real session for the harness, obtained the way a person gets one: ask for
+   a code, read it (the local server shows it), verify. Changes need a proven
+   sign-in now (server._proven_session_gate), so a walk that saves anything
+   has to be signed in for real. One per process. */
+let HARNESS_SESSION = null;
+async function harnessSession() {
+  if (HARNESS_SESSION) return HARNESS_SESSION;
+  const post = (p, b) => fetch(BASE + p, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.json());
+  const asked = await post("/api/agency/signin", { email: HARNESS_EMAIL });
+  if (!asked.code) throw new Error(`no sign-in code for the harness: ${asked.error || JSON.stringify(asked)}`);
+  const done = await post("/api/agency/verify", { email: HARNESS_EMAIL, code: asked.code });
+  if (!done.session) throw new Error(`the harness could not verify: ${done.error || JSON.stringify(done)}`);
+  HARNESS_SESSION = done.session;
+  return HARNESS_SESSION;
+}
+
 async function boot({ storage = null, before = null } = {}) {
   refuseRemote();
   await demandScratchContainer();
+  const session = storage ? null : await harnessSession();
   const dom = new JSDOM(read("index.html"), {
     runScripts: "outside-only", pretendToBeVisual: true, url: BASE + "/",
   });
@@ -62,9 +87,12 @@ async function boot({ storage = null, before = null } = {}) {
   Object.defineProperty(window, "localStorage", {
     value: store(storage || { "scdes.registration": JSON.stringify(
       { email: HARNESS_EMAIL, name: "Automated walk", verified: true,
-        state: "SC", agency: HARNESS_AGENCY, abbrev: "HARNESS" }),
+        state: "SC", agency: HARNESS_AGENCY, abbrev: "HARNESS",
+        // On no state's list, so described as an unlisted unit is — without
+        // it a resumed session cannot be placed and the home page shows.
+        unlisted: true, agencyName: "GAIUS harness" }),
       "scdes.welcomeSeen": "1", "scdes.tour": "seen",
-      "scdes.portal": "government" }), writable: true });
+      "scdes.portal": "government", "scdes.session": session }), writable: true });
   Object.defineProperty(window, "sessionStorage", { value: store(), writable: true });
   window.confirm = () => true;
   window.alert = () => {};
@@ -80,7 +108,7 @@ async function boot({ storage = null, before = null } = {}) {
   // boot() returns — hooks it here, ahead of the page's own scripts.
   if (before) before(window);
   // One evaluation, so the scripts share one scope the way a page does.
-  const all = ["bugs.js", "dock.js", "guide.js", "notify.js", "onboard.js",
+  const all = ["bugs.js", "dock.js", "guide.js", "notify.js", "home.js", "onboard.js",
                "welcome.js", "tour.js", "launcher.js", "speech.js",
                "builder.js", "app.js"].map((f) => read(path.join("assets", f)));
   try { window.eval(all.join("\n;\n")); } catch (e) { errors.push(e.message); }
@@ -135,4 +163,4 @@ async function openView(window, view, proof) {
   return false;
 }
 
-module.exports = { boot, settle, until, reporter, openView, BASE };
+module.exports = { boot, settle, until, reporter, openView, BASE, harnessSession };

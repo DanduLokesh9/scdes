@@ -104,7 +104,14 @@ async function fbApi(path, opts = {}) {
   const query = "user=" + encodeURIComponent(user)
     + (email ? "&email=" + encodeURIComponent(email) : "");
   const r = await fetch(path + sep + query, { headers, ...opts });
-  return r.json();
+  const data = await r.json();
+  // Refused for want of an organization: the shell says the session ended
+  // (app.js, sessionEnded) instead of the answer looking saved.
+  if (data && data.session_ended) {
+    if (opts.method === "POST" && window.queueRefused) window.queueRefused(path, opts.body);
+    if (window.sessionEnded) window.sessionEnded(data.error);
+  }
+  return data;
 }
 
 const fbPost = (path, body) =>

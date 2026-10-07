@@ -1104,14 +1104,17 @@ function rememberSession(token) {
   try { localStorage.setItem("scdes.session", token); } catch (e) {}
 }
 
-function signinShell(entry, inner) {
+function signinShell(entry, inner, opts = {}) {
   const panel = document.getElementById("signinPanel");
   const outer = document.querySelector(".lnch-inner");
   panel.innerHTML = `
-    <div class="signin-card" role="dialog" aria-modal="true"
+    <div class="signin-card${opts.wide ? " signin-wide" : ""}" role="dialog" aria-modal="true"
          aria-labelledby="signinTitle">
-      <p class="signin-eyebrow">${escHtml(entry.state)}</p>
-      <h2 id="signinTitle">${escHtml(LNCH.agencyName || entry.agency)}</h2>
+      ${opts.logo
+        ? `<span class="gaius-logo gaius-logo-full signin-logo" role="img"
+             aria-label="GoverningAI.US — Making Your Rules Authoritative"></span>`
+        : `<p class="signin-eyebrow">${escHtml(opts.eyebrow || entry.state)}</p>`}
+      <h2 id="signinTitle">${escHtml(opts.title || LNCH.agencyName || entry.agency)}</h2>
       ${inner}
     </div>`;
   if (outer) outer.hidden = true;
@@ -1126,7 +1129,7 @@ async function showSignin(entry) {
   // saved.email, not a bare `email` — there is no such variable in this scope,
   // and the ReferenceError it threw killed the click silently. Pressing "Enter
   // DEMO" simply did nothing.
-  if (access.allowed) return showNda(entry, saved.email, access);
+  if (access.allowed) return termsGate(entry, saved.email, access);
   if (access.status === "pending_approval") return showWaiting(entry, saved, access);
   if (access.status === "pending_code") return showVerify(entry, saved.email);
   return showRegister(entry, saved);
@@ -1145,93 +1148,335 @@ function enterClicks(e, buttonId) {
   if (go && !go.disabled) go.click();
 }
 
+/* Registering a listed agency is Brett's agreement form (Oct 2026): see
+   showTermsCard below. */
 function showRegister(entry, saved) {
-  const domain = LNCH.agencyDomain || "";
+  return showTermsCard(entry, "listed", saved || storedRegistration());
+}
+
+/* ------------------------------------------- the Terms of Use and License
+
+   Brett's template (registration-modal.html), built in:
+
+   * The agreement, word for word, in a box that has to be scrolled to the end
+     before Accept will work — or that opens on its own where the whole text
+     already fits, so a tall screen cannot make registering impossible.
+   * Name, title, work email and the governmental unit — the record the
+     agreement says is evidence — and a separate box for authority and age.
+   * Accept and continue stays disabled until all of that is true. Only then
+     is the code sent; the server refuses a code to an address that has not
+     accepted, so this is not the only check.
+   * "Our counsel requires a signed agreement" emails the countersignable form
+     and pauses the registration until IIA has the executed copy.
+
+   It cannot be dismissed into the product: there is no close control, and
+   Escape does nothing here. "Back to the map" leads away from the product,
+   not into it.
+
+   Three uses: registering a listed agency, registering one that is not on the
+   list, and — `gate` — an existing user signing in after the Terms replaced
+   the earlier NDA, who accepts once and is then let in. */
+let TERMS_DOC = null;
+async function termsDocument(email) {
+  try {
+    const r = await fetch("/api/terms?email=" + encodeURIComponent(email || ""))
+      .then((x) => x.json());
+    if (r && r.available) TERMS_DOC = r;
+    return r;
+  } catch (e) { return null; }
+}
+
+async function showTermsCard(entry, mode, saved, access) {
+  const doc = TERMS_DOC || await termsDocument(saved && saved.email);
+  if (!doc || !doc.available) {
+    signinShell(entry, `<p class="signin-lede">The Terms of Use could not be loaded.</p>
+      <p class="signin-warn">Registration needs them, so this is a stop rather than a
+        warning. Try again in a moment.</p>
+      <div class="signin-actions"><button class="btn ghost" id="tcBack" type="button">Back to the map</button></div>`);
+    document.getElementById("tcBack").onclick = () => showMap();
+    return;
+  }
+  const gate = mode === "gate";
+  const listed = mode === "listed";
+  const domain = listed ? (LNCH.agencyDomain || "") : "";
+  const unitName = gate ? ((access && access.agency_label) || LNCH.agencyName || saved.agencyName || "")
+    : listed ? (LNCH.agencyName || "") : (saved.unlisted ? (saved.agencyName || "") : "");
+  /* Signing in, the heading names the organization the address belongs to —
+     the one in the Governmental unit box — not whichever agency was picked
+     on the map. Brett, BUG-25E4892D: picked SCDES, signed in with an IIA
+     address, and the card said SCDES above "DEMO - IIA agency". */
+  const own = gate && access && access.state ? entryForAgency(access.state) : null;
+  const heading = gate ? { title: unitName, eyebrow: own ? own.state : "" } : {};
+  const lede = gate
+    ? "The Terms of Use and License Agreement now governs your use of GoverningAI.US. Read it, and accept it to continue."
+    : listed
+    ? `Register to govern AI for ${escHtml(LNCH.agencyName || "this agency")}. Read the agreement, tell us who you are, and accept it — a verification code is sent once you have.`
+    : "Not on our list? You can still build your framework. Read the agreement, tell us your organization's name and who you are, and accept it — a verification code is sent once you have.";
+
   signinShell(entry, `
-    <p class="signin-lede">Register to govern AI for this agency. Every action
-      you take is recorded against the name and title you enter, so please use
-      your own.</p>
-
-    <label class="signin-field"><span>Your full name</span>
-      <input id="regName" type="text" autocomplete="name" spellcheck="false"
-             value="${escHtml(saved.name || "")}"></label>
-    <label class="signin-field"><span>Your job title</span>
-      <input id="regTitle" type="text" autocomplete="organization-title"
-             spellcheck="false" value="${escHtml(saved.title || "")}"></label>
-    <label class="signin-field"><span>Work email${
-        domain ? ` <em>— must end in @${escHtml(domain)}</em>` : ""}</span>
-      <input id="regEmail" type="email" autocomplete="email" spellcheck="false"
-             value="${escHtml(saved.email || "")}"></label>
-    <label class="signin-field"><span>Contact phone</span>
-      <input id="regPhone" type="tel" autocomplete="tel"
-             value="${escHtml(saved.phone || "")}"></label>
-
-    <label class="signin-attest">
-      <input id="regAttest" type="checkbox">
-      <span>I hold delegated authority to register on behalf of this agency,
-        and I understand this is recorded.</span>
-    </label>
-
-    <p class="signin-error" id="regError" hidden></p>
-    <p class="signin-warn">Registering claims this agency. Nobody else will be
-      able to register it — only you will be able to add colleagues. Your
-      mailbox is verified with a code${reviewRequired()
-        ? "; your authority is confirmed by a reviewer."
-        : ". Nobody checks your authority — what you build stays a draft until "
-          + "whoever holds it adopts your framework."}</p>
-
-    <div class="signin-actions">
-      <button class="btn ghost" id="regBack" type="button">Back to map</button>
-      <button class="btn" id="regGo" type="button">Register</button>
+    <p class="signin-lede">${lede}</p>
+    <div class="terms-head">
+      <span class="gaius-logo gaius-logo-g" aria-hidden="true"></span>
+      <div><b id="termsTitle">Terms of Use and License Agreement</b>
+        <span>GoverningAI.US · ${escHtml(doc.tier)} · ${escHtml(doc.version)}</span></div>
     </div>
-    <p class="signin-alt">Already registered?
-      <button class="linkish" id="regSignin" type="button">Sign in
-        instead</button></p>`);
+    <div class="terms-box" id="termsBody" tabindex="0" role="region"
+         aria-labelledby="termsTitle">${doc.html}
+      <p class="terms-end">End of agreement. You have reached the bottom.</p></div>
+    <p class="terms-meta"><a href="${escHtml(doc.download_url)}" download>Download a copy</a> ·
+      <span class="mono" title="The exact version you are accepting">${escHtml((doc.sha256 || "").slice(0, 12))}</span></p>
+    <p class="terms-scrollnote" id="termsNote" aria-live="polite"><span id="termsIcon" aria-hidden="true">↓</span>
+      <span id="termsNoteText">Scroll to the end of the agreement to continue</span></p>
 
-  const toSignin = document.getElementById("regSignin");
-  if (toSignin) toSignin.onclick = () => showReturning(entry, saved.email || "");
+    <div class="terms-fields">
+      <label class="signin-field"><span>Your name</span>
+        <input id="tcName" type="text" autocomplete="name" spellcheck="false"
+               value="${escHtml(saved.name || (access && access.name) || "")}"></label>
+      <label class="signin-field"><span>Your title</span>
+        <input id="tcTitle" type="text" autocomplete="organization-title" spellcheck="false"
+               value="${escHtml(saved.title || (access && access.title) || "")}"></label>
+      <label class="signin-field"><span>Work email${domain ? ` <em>— must end in @${escHtml(domain)}</em>` : ""}</span>
+        <input id="tcEmail" type="email" autocomplete="email" spellcheck="false"
+               value="${escHtml(saved.email || "")}"${gate ? " readonly" : ""}></label>
+      <label class="signin-field"><span>Governmental unit</span>
+        <input id="tcUnit" type="text" autocomplete="organization" spellcheck="false"
+               value="${escHtml(unitName)}"${listed || gate ? " readonly" : ""}></label>
+    </div>
+    <label class="signin-attest"><input id="tcAuth" type="checkbox">
+      <span>I am authorized to accept this Agreement on behalf of the governmental unit
+        named above, and I am at least 18 years of age.</span></label>
 
-  const err = document.getElementById("regError");
+    <p class="signin-error" id="tcError" role="alert" hidden></p>
+    <div class="signin-actions">
+      <button class="btn ghost" id="tcBack" type="button">${gate ? "Sign out" : "Back to the map"}</button>
+      <button class="btn terms-accept" id="tcGo" type="button" disabled>Accept and continue</button>
+    </div>
+    <p class="signin-alt"><button class="linkish" id="tcSigned" type="button">Our counsel requires
+      a signed agreement</button>${gate ? "" : ` · Already registered?
+      <button class="linkish" id="tcSignin" type="button">Log in instead</button>`}</p>`, { wide: true, ...heading });
+
+  const body = document.getElementById("termsBody");
+  const note = document.getElementById("termsNote");
+  const go = document.getElementById("tcGo");
+  const err = document.getElementById("tcError");
+  const val = (id) => document.getElementById(id).value.trim();
   const fail = (m) => { err.textContent = m; err.hidden = !m; };
-  ["regName", "regTitle", "regEmail", "regPhone"].forEach((id) => {
-    document.getElementById(id).oninput = () => fail("");
-    document.getElementById(id).onkeydown = (e) => enterClicks(e, "regGo");
-  });
-
-  document.getElementById("regBack").onclick = () => showMap();
-  document.getElementById("regGo").onclick = async () => {
-    const body = {
-      agency: LNCH.agency,
-      name: document.getElementById("regName").value.trim(),
-      title: document.getElementById("regTitle").value.trim(),
-      email: document.getElementById("regEmail").value.trim(),
-      phone: document.getElementById("regPhone").value.trim(),
-      attested: document.getElementById("regAttest").checked,
-    };
-    const go = document.getElementById("regGo");
-    go.disabled = true; go.textContent = "Checking…";
-    let r;
-    try {
-      r = await fetch("/api/agency/register", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }).then((x) => x.json());
-    } catch (e) {
-      r = { ok: false, error: "Could not reach the server. Try again." };
+  let scrolled = false;
+  const filled = () => ["tcName", "tcTitle", "tcEmail", "tcUnit"].every((id) => val(id).length > 1);
+  const sync = () => {
+    go.disabled = !(scrolled && document.getElementById("tcAuth").checked && filled());
+  };
+  const markRead = (msg) => {
+    scrolled = true;
+    note.classList.add("done");
+    document.getElementById("termsIcon").textContent = "✓";
+    document.getElementById("termsNoteText").textContent = msg;
+    sync();
+  };
+  const checkScroll = () => {
+    if (scrolled) return;
+    // Where the whole agreement fits there is nothing to scroll, and the gate
+    // must open on its own or registering becomes impossible on a tall screen.
+    if (body.scrollHeight <= body.clientHeight + 8 && body.clientHeight > 0) {
+      return markRead("The full agreement is displayed above");
     }
-    go.disabled = false; go.textContent = "Register";
+    if (body.scrollTop + body.clientHeight >= body.scrollHeight - 12 && body.scrollTop > 0) {
+      markRead("You have read to the end of the agreement");
+    }
+  };
+  body.addEventListener("scroll", checkScroll, { passive: true });
+  requestAnimationFrame(checkScroll);
+  ["tcName", "tcTitle", "tcEmail", "tcUnit"].forEach((id) => {
+    document.getElementById(id).oninput = () => { fail(""); sync(); };
+  });
+  document.getElementById("tcAuth").onchange = sync;
+
+  document.getElementById("tcBack").onclick = () => {
+    if (gate && window.signOut) { window.signOut(); return; }
+    showMap();
+  };
+  const toSignin = document.getElementById("tcSignin");
+  if (toSignin) toSignin.onclick = () => showLogin(val("tcEmail"));
+
+  const who = () => ({ name: val("tcName"), title: val("tcTitle"),
+                       email: val("tcEmail").toLowerCase(), unit: val("tcUnit") });
+
+  document.getElementById("tcSigned").onclick = async () => {
+    const p = who();
+    if (!p.email.includes("@") || p.name.length < 2 || p.unit.length < 2) {
+      return fail("Enter your name, work email and governmental unit first, so the "
+                  + "signed form can be sent to you.");
+    }
+    const r = await post("/api/terms/signed", { ...p, agency: LNCH.agency || "" });
+    if (!r || !r.ok) return fail((r && r.error) || "That request could not be sent.");
+    rememberRegistration({ name: p.name, title: p.title, email: p.email });
+    showSignedWaiting(entry, p, r.says);
+  };
+
+  go.onclick = async () => {
+    const p = who();
+    go.disabled = true; go.textContent = "Recording…";
+    const reset = () => { go.textContent = "Accept and continue"; sync(); };
+    let r = await post("/api/terms/accept", { ...p, agency: LNCH.agency || "",
+      authority: document.getElementById("tcAuth").checked, scrolled,
+      sha256: doc.sha256, user_agent: navigator.userAgent.slice(0, 200) })
+      .catch(() => ({ ok: false, error: "Could not reach the server." }));
+    if (!r.ok) { reset(); return fail(r.error || "Your acceptance could not be recorded."); }
+
+    // Existing user: accepted, so in.
+    if (gate) return finishSignin(access || await agencyAccess(p.email));
+
+    go.textContent = "Sending your code…";
+    if (listed) {
+      r = await post("/api/agency/register", { agency: LNCH.agency, name: p.name,
+        title: p.title, email: p.email, attested: true })
+        .catch(() => ({ ok: false, error: "Could not reach the server. Try again." }));
+      reset();
+      if (!r.ok) {
+        if (r.is_you) return showReturning(entry, p.email);
+        return fail(r.error || "That registration was refused.");
+      }
+      rememberRegistration({ name: p.name, title: p.title, email: p.email, agency: LNCH.agency });
+      return showVerify(entry, p.email, r.code, r.expires_in_minutes, r.delivery_note, r.mail_failed);
+    }
+    r = await post("/api/agency/register-unlisted", { state: entry.code, unit: p.unit,
+      name: p.name, title: p.title, email: p.email, attested: true })
+      .catch(() => ({ ok: false, error: "Could not reach the server. Try again." }));
+    reset();
     if (!r.ok) {
-      // It is them. Sending them round the same form again would be the third
-      // time the product told them to ask themselves for access.
-      if (r.is_you) return showReturning(entry, body.email);
+      if (r.is_you) return showReturning(entry, p.email);
       return fail(r.error || "That registration was refused.");
     }
-
-    rememberRegistration({ ...body, agency: LNCH.agency });
-    showVerify(entry, body.email, r.code, r.expires_in_minutes,
-               r.delivery_note, r.mail_failed);
+    // From here it is the ordinary path. The unit's own id, name and
+    // shorthand are kept with the registration, because the dropdown will
+    // never list it and every later screen needs its name.
+    LNCH.agency = r.agency.id;
+    LNCH.agencyName = r.agency.name;
+    LNCH.agencyDomain = "";
+    rememberRegistration({ name: p.name, title: p.title, email: p.email,
+      state: entry.code, agency: r.agency.id, agencyName: r.agency.name,
+      abbrev: r.agency.abbrev, unlisted: true });
+    showVerify(entry, p.email, r.code, r.expires_in_minutes, r.delivery_note, r.mail_failed);
   };
-  document.getElementById("regName").focus();
+  body.focus();
+}
+
+/* The counsel route, after the request: nothing more to do here until IIA
+   has the executed copy back. */
+function showSignedWaiting(entry, who, says) {
+  signinShell(entry, `
+    <p class="signin-lede">The signed form is on its way.</p>
+    <p class="signin-warn">${escHtml(says || "")}</p>
+    <p class="signin-lede" style="margin-top:12px">Requested by <b>${escHtml(who.name)}</b>${
+      who.title ? `, ${escHtml(who.title)}` : ""}, for <b>${escHtml(who.unit)}</b>
+      (${escHtml(who.email)}).</p>
+    <p class="small"><a href="${escHtml((TERMS_DOC && TERMS_DOC.signed_form_url) || "#")}" download>Download
+      the signed form</a> as well, if you would rather not wait for the email.</p>
+    <div class="signin-actions">
+      <button class="btn ghost" id="swBack" type="button">Back to the map</button>
+    </div>`);
+  document.getElementById("swBack").onclick = () => showMap();
+}
+
+/* After the code: the Terms stand between proving the mailbox and the
+   product, for anybody who has not accepted the current version — which
+   includes everybody registered before the Terms replaced the NDA. */
+async function termsGate(entry, email, access) {
+  const doc = await termsDocument(email);
+  if (doc && doc.status && doc.status.accepted) {
+    return finishSignin(access || await agencyAccess(email));
+  }
+  const acc = access || await agencyAccess(email);
+  return showTermsCard(entry, "gate", { ...storedRegistration(), email }, acc);
+}
+
+/* ----------------------------------------------------------- log in
+
+   The "Log in" button on the home page, for anybody already registered. It
+   needs no agency picked first: the address says which organization it
+   belongs to, and the code proves the address. */
+function entryForAgency(id) {
+  const states = (LNCH.data && LNCH.data.states) || [];
+  const code = String(id || "");
+  return states.find((s) => (s.agencies || []).some((a) => a.id === code))
+    || states.find((s) => s.code.toLowerCase() === code.split(".")[0])
+    || null;
+}
+
+function showLogin(prefill) {
+  const host = document.getElementById("launcher");
+  host.hidden = false;
+  document.body.classList.add("launcher-open");
+  LNCH.loginMode = true;
+  const entry = { state: "GoverningAI.US", agency: "Log in", code: "" };
+  LNCH.agencyName = "";
+  signinShell(entry, `
+    <p class="signin-lede">Welcome back. A six-digit code goes to the work email you
+      registered with.</p>
+    <label class="signin-field"><span>Work email</span>
+      <input id="liEmail" type="email" autocomplete="email" spellcheck="false"
+             value="${escHtml(prefill || storedRegistration().email || "")}"></label>
+    <p class="signin-error" id="liError" role="alert" hidden></p>
+    <div class="signin-actions">
+      <button class="btn ghost" id="liBack" type="button">Back</button>
+      <button class="btn" id="liGo" type="button">Send me a code</button>
+    </div>
+    <p class="signin-alt">Not registered yet?
+      <button class="linkish" id="liBegin" type="button">Begin — choose your agency</button></p>`,
+    { logo: true });
+  const box = document.getElementById("liEmail");
+  const err = document.getElementById("liError");
+  const fail = (m) => { err.textContent = m; err.hidden = !m; };
+  box.oninput = () => fail("");
+  box.onkeydown = (e) => enterClicks(e, "liGo");
+  document.getElementById("liBack").onclick = () => {
+    LNCH.loginMode = false;
+    closeLauncher(true);
+    if (window.showHome) window.showHome();
+  };
+  document.getElementById("liBegin").onclick = () => { LNCH.loginMode = false; showMap(); };
+  document.getElementById("liGo").onclick = async () => {
+    const email = (box.value || "").trim().toLowerCase();
+    if (!email.includes("@")) return fail("Enter the work email you registered with.");
+    const go = document.getElementById("liGo");
+    go.disabled = true; go.textContent = "Sending…";
+    const r = await post("/api/agency/signin", { email })
+      .catch(() => ({ ok: false, error: "Could not reach the server." }));
+    go.disabled = false; go.textContent = "Send me a code";
+    if (!r.ok) return fail(r.error || "Could not send a code.");
+    rememberRegistration({ email });
+    showVerify(entry, email, r.code, r.expires_in_minutes, r.delivery_note, r.mail_failed);
+  };
+  box.focus();
+}
+window.showLogin = showLogin;
+
+/* After a code is accepted. A log-in from the home page knew no agency, so
+   it is read from the server's answer about this address before anything is
+   shown under any organization's name. */
+async function afterVerify(entry, email) {
+  if (!LNCH.loginMode) return termsGate(entry, email);
+  const access = await agencyAccess(email);
+  const real = entryForAgency(access.state);
+  LNCH.loginMode = false;
+  if (!real || !access.state) {
+    return signinShell(entry, `<p class="signin-lede">That address is verified, but it is
+      not on any organization yet.</p>
+      <div class="signin-actions"><button class="btn" id="avBegin" type="button">Choose your agency</button></div>`)
+      || (document.getElementById("avBegin").onclick = () => showMap());
+  }
+  LNCH.agency = access.state;
+  LNCH.active = real.code;
+  const listedAgency = (real.agencies || []).find((a) => a.id === access.state);
+  LNCH.agencyName = access.agency_label || (listedAgency && listedAgency.name) || "";
+  LNCH.agencyDomain = (listedAgency && listedAgency.domain) || "";
+  if (access.unlisted) {
+    rememberRegistration({ unlisted: true, agency: access.state,
+      agencyName: access.agency_label, abbrev: access.agency_abbrev });
+  }
+  selectState(real.code, false);
+  if (access.status === "pending_approval") return showWaiting(real, storedRegistration(), access);
+  return termsGate(real, email, access);
 }
 
 /* ---------------------------------------------- 1b. not on the list
@@ -1249,108 +1494,7 @@ function showUnlisted(entry, saved = storedRegistration()) {
   // The heading would otherwise fall back to the state's own environmental
   // agency, putting another organization's name at the top of this form.
   LNCH.agencyName = "Your governmental unit";
-  signinShell(entry, `
-    <p class="signin-lede">Not on our list? You can still build your
-      framework. Tell us what your organization is called, and register the
-      same way everyone else does.</p>
-
-    <label class="signin-field"><span>Your organization's name</span>
-      <input id="unUnit" type="text" autocomplete="organization"
-             spellcheck="false" aria-describedby="unUnitHint"
-             value="${escHtml(saved.unlisted
-               ? (saved.agencyName || "") : "")}"></label>
-    <p class="signin-hint" id="unUnitHint">As it appears on your letterhead —
-      for example, "Harris County Municipal Utility District No. 12".</p>
-
-    <label class="signin-field"><span>Your full name</span>
-      <input id="unName" type="text" autocomplete="name" spellcheck="false"
-             value="${escHtml(saved.name || "")}"></label>
-    <label class="signin-field"><span>Your job title</span>
-      <input id="unTitle" type="text" autocomplete="organization-title"
-             spellcheck="false" value="${escHtml(saved.title || "")}"></label>
-    <label class="signin-field"><span>Email</span>
-      <input id="unEmail" type="email" autocomplete="email" spellcheck="false"
-             value="${escHtml(saved.email || "")}"></label>
-    <label class="signin-field"><span>Contact phone</span>
-      <input id="unPhone" type="tel" autocomplete="tel"
-             value="${escHtml(saved.phone || "")}"></label>
-
-    <label class="signin-attest">
-      <input id="unAttest" type="checkbox">
-      <span>I hold delegated authority to register on behalf of this
-        organization, and I understand this is recorded.</span>
-    </label>
-
-    <p class="signin-error" id="unError" role="alert" hidden></p>
-    <p class="signin-warn">Because your organization is not on our list, no
-      email domain is required, and nobody checks the name you enter. We send
-      a code to your address to confirm it is yours. Your organization and its
-      framework are visible only to you and the colleagues you add, and the
-      framework stays marked DRAFT until whoever holds the authority adopts
-      it.</p>
-
-    <div class="signin-actions">
-      <button class="btn ghost" id="unBack" type="button">Back to map</button>
-      <button class="btn" id="unGo" type="button">Register</button>
-    </div>
-    <p class="signin-alt">Already registered your organization?
-      <button class="linkish" id="unSignin" type="button">Sign in
-        instead</button></p>`);
-
-  const err = document.getElementById("unError");
-  const fail = (m) => { err.textContent = m; err.hidden = !m; };
-  ["unUnit", "unName", "unTitle", "unEmail", "unPhone"].forEach((id) => {
-    document.getElementById(id).oninput = () => fail("");
-    document.getElementById(id).onkeydown = (e) => enterClicks(e, "unGo");
-  });
-
-  document.getElementById("unBack").onclick = () => showMap();
-  document.getElementById("unSignin").onclick = () =>
-    showReturning(entry, saved.email || "");
-
-  document.getElementById("unGo").onclick = async () => {
-    const body = {
-      state: entry.code,
-      unit: document.getElementById("unUnit").value.trim(),
-      name: document.getElementById("unName").value.trim(),
-      title: document.getElementById("unTitle").value.trim(),
-      email: document.getElementById("unEmail").value.trim(),
-      phone: document.getElementById("unPhone").value.trim(),
-      attested: document.getElementById("unAttest").checked,
-    };
-    if (!body.unit) {
-      document.getElementById("unUnit").focus();
-      return fail("Enter your organization's name.");
-    }
-    const go = document.getElementById("unGo");
-    go.disabled = true; go.textContent = "Checking…";
-    let r;
-    try {
-      r = await post("/api/agency/register-unlisted", body);
-    } catch (e) {
-      r = { ok: false, error: "Could not reach the server. Try again." };
-    }
-    go.disabled = false; go.textContent = "Register";
-    if (!r.ok) {
-      if (r.is_you) return showReturning(entry, body.email);
-      return fail(r.error || "That registration was refused.");
-    }
-
-    // From here it is the ordinary path. The unit's own id, name and
-    // shorthand are kept with the registration, because the dropdown will
-    // never list it and every later screen needs its name.
-    LNCH.agency = r.agency.id;
-    LNCH.agencyName = r.agency.name;
-    LNCH.agencyDomain = "";
-    rememberRegistration({
-      name: body.name, title: body.title, email: body.email,
-      phone: body.phone, state: entry.code, agency: r.agency.id,
-      agencyName: r.agency.name, abbrev: r.agency.abbrev, unlisted: true,
-    });
-    showVerify(entry, body.email, r.code, r.expires_in_minutes,
-               r.delivery_note, r.mail_failed);
-  };
-  document.getElementById("unUnit").focus();
+  return showTermsCard(entry, "unlisted", saved);
 }
 
 /* The agency to put on screen for an id, including one that is not on the
@@ -1452,6 +1596,7 @@ function showVerify(entry, email, shownCode, ttl, deliveryNote, mailFailed) {
 
   document.getElementById("verBack").onclick = () => {
     const saved = storedRegistration();
+    if (LNCH.loginMode) return showLogin(email);
     // Back to the form they came from. The unlisted form has the
     // organization's name on it, which the listed one does not.
     if (saved.unlisted) return showUnlisted(entry, saved);
@@ -1492,7 +1637,9 @@ function showVerify(entry, email, shownCode, ttl, deliveryNote, mailFailed) {
     // other agencies, above all — is decided from this token rather than from
     // the address in the query string. See app/admin.py.
     rememberSession(r.session);
-    if (r.status === "active") return showNda(entry, email);
+    // Then the Terms of Use, for anybody who has not accepted the current
+    // version — see termsGate.
+    if (r.status === "active") return afterVerify(entry, email);
     showWaiting(entry, storedRegistration(), r);
   };
   box.focus();
@@ -1522,7 +1669,7 @@ function showWaiting(entry, saved, info) {
   document.getElementById("waitBack").onclick = () => showMap();
   document.getElementById("waitCheck").onclick = async () => {
     const access = await agencyAccess(saved.email);
-    if (access.allowed) return showNda(entry, saved.email, access);
+    if (access.allowed) return termsGate(entry, saved.email, access);
     toast("Still waiting on the reviewer.");
   };
 }
@@ -1928,14 +2075,35 @@ async function initLauncher() {
      Signing out clears the stored agency, which is what brings the map back. */
   if (await resumeSession()) return;
 
-  const onboarding = window.initOnboarding ? await window.initOnboarding() : false;
-  if (!onboarding) openLauncher();
+  /* Everybody else lands on the home page (home.js): Begin opens this map,
+     Log in opens the log-in card. Brett's flow, Oct 2026 — it replaces the
+     "Register your work email" screen, whose job the agency's own email rule
+     and the Terms of Use now do. That screen still runs for IIA's own
+     `?tester=` links, which set up a tester through it. */
+  if (/[?&]tester=/.test(location.search) && window.initOnboarding) {
+    const onboarding = await window.initOnboarding();
+    if (!onboarding) openLauncher();
+    return;
+  }
+  if (window.showHome) window.showHome();
+  else openLauncher();
 }
 
 /** Pick up where they left off. True if the map should stay shut. */
 async function resumeSession() {
   const saved = storedRegistration();
   if (!saved.verified || !saved.agency || !saved.state) return false;
+
+  // Remembered, but not proven. A browser signed in before session tokens
+  // existed — or whose token was lost — used to carry on on the address alone,
+  // and every change it made went nowhere (Sep 29). Changes now need a proven
+  // sign-in, so it signs in once more, with the address already filled in.
+  let token = "";
+  try { token = localStorage.getItem("scdes.session") || ""; } catch (e) {}
+  if (!token) {
+    showLogin(saved.email || "");
+    return true;
+  }
 
   const entry = (LNCH.data.states || []).find((s) => s.code === saved.state);
   // Includes a unit that is not on the list, from what this browser kept.
@@ -1944,20 +2112,18 @@ async function resumeSession() {
   // exists means asking again is the only honest option.
   if (!entry || !chosen) return false;
 
-  // The NDA still stands between them and the product. Resuming a session must
-  // not be a way around a gate that a fresh sign-in has to pass.
-  try {
-    const nda = await fetch("/api/nda?email=" + encodeURIComponent(saved.email))
-      .then((r) => r.json());
-    if (nda.status !== "accepted") {
-      LNCH.agency = saved.agency;
-      selectState(saved.state, false);
-      openLauncher(true);          // their own agency, to show the NDA over
-      showNda(entry, saved.email);
-      return true;
-    }
-  } catch (e) {
-    return false;                      // cannot confirm the gate: ask again
+  // The Terms of Use still stand between them and the product. Resuming a
+  // session must not be a way around a gate that a fresh sign-in has to pass.
+  // (They replaced the one-way NDA in Oct 2026; everybody registered before
+  // then accepts them once, here or at their next sign-in.)
+  const doc = await termsDocument(saved.email);
+  if (!doc || !doc.status) return false;   // cannot confirm the gate: ask again
+  if (!doc.status.accepted) {
+    LNCH.agency = saved.agency;
+    selectState(saved.state, false);
+    openLauncher(true);            // their own agency, to show the Terms over
+    termsGate(entry, saved.email);
+    return true;
   }
 
   LNCH.agency = saved.agency;
@@ -1974,8 +2140,16 @@ async function resumeSession() {
 }
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !document.getElementById("launcher").hidden)
-    closeLauncher();
+  // Escape closes the map only for somebody already signed in and past the
+  // Terms, browsing it from inside the product. It used to close it always —
+  // including on the agreement screen, which dropped a person into the
+  // application behind a gate they had not passed.
+  if (e.key === "Escape" && !document.getElementById("launcher").hidden) {
+    const saved = storedRegistration();
+    const panel = document.getElementById("signinPanel");
+    const midSignin = panel && !panel.hidden;
+    if (saved.verified && saved.agency && !midSignin) closeLauncher();
+  }
   trapFocus(e);
 });
 

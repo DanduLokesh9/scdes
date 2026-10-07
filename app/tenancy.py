@@ -46,6 +46,7 @@ from collections.abc import Mapping
 import json
 import re
 import secrets
+import threading
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -717,10 +718,14 @@ def start_registration(agency: str, name: str, title: str, email: str,
         return {"ok": False,
                 "error": "Enter your job title. It goes on the record, and a "
                          "reviewer sees it."}
+    # Optional since the registration form became Brett's agreement form
+    # (Oct 2026), which asks for name, title, work email and governmental
+    # unit only. A number that is given is still checked.
     digits = _PHONE_DIGITS.sub("", phone or "")
-    if len(digits) < 10:
+    if digits and len(digits) < 10:
         return {"ok": False,
-                "error": "Enter a contact phone number with at least 10 digits."}
+                "error": "Enter a contact phone number with at least 10 digits, "
+                         "or leave it blank."}
     if not attested:
         return {"ok": False,
                 "error": "You need to confirm you hold delegated authority to "
@@ -909,29 +914,101 @@ def _note_session(action: str, email: str, data: dict[str, Any]) -> None:
             who = str(held.get("name") or "")
             agency = str(held.get("state") or "")
 
-        default_log().append(
-            actor=email.split("@")[0][:60] or "unknown",
-            role="member", action=action, target="session",
-            outcome="allowed",
-            # No address in the detail. The log is read by admins and exported
-            # in reports, and an email is the one thing here that identifies a
-            # person outside this application.
-            detail={"actor_name": who[:120], "agency": agency})
+        # Filed under the person's own organization. A sign-in is recorded
+        # while the code is being checked — before the request belongs to
+        # anybody — so it landed under no organization ("~unresolved"), which
+        # is why that showed up as a row on the Usage page.
+        from app import tenant as tenant_mod
+        held = tenant_mod.set_current(agency) if agency else None
+        try:
+            default_log().append(
+                actor=email.split("@")[0][:60] or "unknown",
+                role="member", action=action, target="session",
+                outcome="allowed",
+                # No address in the detail. The log is read by admins and
+                # exported in reports, and an email is the one thing here
+                # that identifies a person outside this application.
+                detail={"actor_name": who[:120], "agency": agency})
+        finally:
+            if held is not None:
+                tenant_mod.reset(held)
     except Exception:                                         # noqa: BLE001
         pass
 
 
-def session_email(token: str) -> str:
-    """The address this token proves, or "" — expired, unknown, or absent."""
+#: Sliding expiry. A session stays alive while it is used: each use pushes
+#: its end SESSION_DAYS out again, at most once an hour. Kept in a file of its
+#: own so the accounts store is not rewritten on every request.
+RENEW_EVERY = timedelta(hours=1)
+_RENEW_LOCK = threading.Lock()
+
+
+def _renewals_path() -> Path:
+    return Path(STORE).parent / "session_renewals.json"
+
+
+def _renewals() -> dict[str, Any]:
+    try:
+        return json.loads(_renewals_path().read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def session_expires(token: str) -> str:
+    """When this token stops proving anything, renewals included; "" if it
+    proves nothing now."""
     raw = (token or "").strip()
     if not raw:
         return ""
-    row = _load().get("sessions", {}).get(_hash_code(raw))
+    key = _hash_code(raw)
+    row = _load().get("sessions", {}).get(key)
     if not row:
         return ""
-    if _now().isoformat(timespec="seconds") > row.get("expires", ""):
+    ends = max(str(row.get("expires", "")), str((_renewals().get(key) or {}).get("expires", "")))
+    return ends if _now().isoformat(timespec="seconds") <= ends else ""
+
+
+def session_email(token: str) -> str:
+    """The address this token proves, or "" — expired, unknown, or absent.
+
+    Using a session renews it (see RENEW_EVERY): somebody working steadily is
+    never signed out mid-sentence; only a session left unused for
+    SESSION_DAYS ends."""
+    raw = (token or "").strip()
+    if not raw:
         return ""
+    key = _hash_code(raw)
+    row = _load().get("sessions", {}).get(key)
+    if not row:
+        return ""
+    renewal = _renewals().get(key) or {}
+    ends = max(str(row.get("expires", "")), str(renewal.get("expires", "")))
+    now = _now()
+    if now.isoformat(timespec="seconds") > ends:
+        return ""
+    last = str(renewal.get("at") or row.get("issued_at") or "")
+    try:
+        due = not last or now - datetime.fromisoformat(last) >= RENEW_EVERY
+    except ValueError:
+        due = True
+    if due:
+        _renew(key, now)
     return str(row.get("email", ""))
+
+
+def _renew(key: str, now: datetime) -> None:
+    try:
+        with _RENEW_LOCK:
+            data = _renewals()
+            data[key] = {"at": now.isoformat(timespec="seconds"),
+                         "expires": (now + timedelta(days=SESSION_DAYS)).isoformat(timespec="seconds")}
+            path = _renewals_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data), encoding="utf-8")
+            tmp.replace(path)
+    except Exception:                                         # noqa: BLE001
+        pass                     # a renewal that fails leaves the old expiry
 
 
 def end_session(token: str) -> None:

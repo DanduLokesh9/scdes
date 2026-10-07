@@ -30,6 +30,11 @@ def isolated(tmp_path, monkeypatch):
                         lambda *a, **k: {"sent": False, "reason": "test"})
     monkeypatch.setattr(mailer, "may_show_code_to", lambda address: True)
     monkeypatch.setattr(mailer, "note_for", lambda d: "test")
+    # These are about the unlisted door, not the Terms of Use — every address
+    # here is taken to have accepted them. tests/test_terms.py covers the gate.
+    from app import terms
+    monkeypatch.setattr(terms, "STORE", tmp_path / "terms.json")
+    monkeypatch.setattr(terms, "may_register", lambda email: True)
     yield
 
 

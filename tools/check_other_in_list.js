@@ -77,7 +77,10 @@ async function main() {
   check("the box shows the choice", /not listed/.test(doc.getElementById("agencyPick").value));
 
   go.click();
-  check("the button opens the Not on our list sign-up", await until(() => doc.getElementById("unUnit")));
+  // The "Not on our list" sign-up is the agreement card with the unit's name
+  // left for them to type (launcher.js, showTermsCard).
+  check("the button opens the Not on our list sign-up", await until(() => doc.getElementById("tcUnit")
+    && !doc.getElementById("tcUnit").readOnly));
   check("nothing was sent", posts.length === 0, posts.join(" "));
 
   console.log("\nEnter does the same");
@@ -87,7 +90,8 @@ async function main() {
   await settle(30);
   const input = doc.getElementById("agencyPick");
   input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  check("Enter opens it too", await until(() => doc.getElementById("unUnit")));
+  check("Enter opens it too", await until(() => doc.getElementById("tcUnit")
+    && !doc.getElementById("tcUnit").readOnly));
 
   window.fetch = real;
   finish(errors, "every state's agency list ends with Other, and it leads to the Not on our list sign-up");

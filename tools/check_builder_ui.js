@@ -13,6 +13,7 @@
    Usage:  node tools/check_builder_ui.js       (server must be running)
 */
 
+const { harnessSession } = require("./_jsdom_boot");
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
 const path = require("path");
@@ -77,7 +78,9 @@ async function boot() {
       { email: HARNESS_EMAIL, name: "Automated walk", verified: true,
         state: "SC", agency: HARNESS_AGENCY, abbrev: "HARNESS" }),
       "scdes.welcomeSeen": "1", "scdes.tour": "seen",
-      "scdes.portal": "government" }), writable: true });
+      "scdes.portal": "government",
+      // Signed in for real: changes need a proven session now.
+      "scdes.session": await harnessSession() }), writable: true });
   Object.defineProperty(window, "sessionStorage",
     { value: store(), writable: true });
   window.confirm = () => true;
@@ -152,7 +155,8 @@ async function main() {
                      "watch.publish", "bad.tell", "scope.covered",
                      "floor.disclose_who", "words.03", "who.signs"]) {
     await window.fetch("/api/versions/answer?user=sean.ot&email=walk%40harness.gaius.test", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json",
+        "X-GAIUS-Session": window.localStorage.getItem("scdes.session") || "" },
       body: JSON.stringify({ key, value: "" }) });
   }
 
@@ -672,12 +676,14 @@ async function main() {
   for (const [key, value] of [["risk.revisit", "vendor_change"]]) {
     await window.fetch("/api/versions/answer?user=sean.ot&email="
       + encodeURIComponent(HARNESS_EMAIL), {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json",
+        "X-GAIUS-Session": window.localStorage.getItem("scdes.session") || "" },
       body: JSON.stringify({ key, value: [value] }) });
   }
   await window.fetch("/api/versions/answer?user=sean.ot&email="
     + encodeURIComponent(HARNESS_EMAIL), {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json",
+        "X-GAIUS-Session": window.localStorage.getItem("scdes.session") || "" },
     body: JSON.stringify({ key: "proc.added_ai", value: "nothing" }) });
   // 4.8 too, because the assembly step pre-fills who signs from it.
   const signs = doc.querySelector(
@@ -792,7 +798,8 @@ async function main() {
   const forget = async (id) => window.fetch(
     "/api/snapshots/forget?user=sean.ot&email="
     + encodeURIComponent(HARNESS_EMAIL), {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json",
+        "X-GAIUS-Session": window.localStorage.getItem("scdes.session") || "" },
       body: JSON.stringify({ id }) });
 
   const before = await (await window.fetch(snapUrl)).json();
@@ -861,7 +868,8 @@ async function main() {
   const hadBefore = await answersNow();
   await window.fetch("/api/reset?user=sean.ot&email="
     + encodeURIComponent(HARNESS_EMAIL), {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json",
+        "X-GAIUS-Session": window.localStorage.getItem("scdes.session") || "" },
     body: JSON.stringify({ confirm: "START OVER", reason: "harness" }) });
   const wiped = await answersNow();
   check("starting over clears the answers", wiped === 0,
@@ -887,7 +895,8 @@ async function main() {
   if (mine) {
     await window.fetch("/api/snapshots/restore?user=sean.ot&email="
       + encodeURIComponent(HARNESS_EMAIL), {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json",
+        "X-GAIUS-Session": window.localStorage.getItem("scdes.session") || "" },
       body: JSON.stringify({ id: mine.id }) });
     const back = await answersNow();
     check("and putting it back returns every answer", back === hadBefore,

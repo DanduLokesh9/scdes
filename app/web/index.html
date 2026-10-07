@@ -29,6 +29,7 @@
 <link rel="stylesheet" href="/assets/brand/tokens.css">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/launcher.css">
+<link rel="stylesheet" href="/assets/home.css">
 </head>
 <!-- `booting` until the shell has its state. Removed at the end of the boot
      sequence in app.js, and deliberately NOT removed if that sequence fails.
@@ -45,6 +46,9 @@
 </div>
 <!-- Onboarding sits above the map: which kind of organization, then an email,
      and only then the agency picker. -->
+<!-- The home page: the public front door, with Begin and Log in. Shown to
+     anybody not signed in; see assets/home.js. -->
+<div class="home" id="home" hidden></div>
 <div class="onboard" id="onboard" hidden></div>
 <div class="launcher" id="launcher" hidden></div>
 <a class="skip" href="#record">Skip to main content</a>
@@ -174,12 +178,15 @@
     <button class="rail-item" data-view="holdings" data-paid="1"><i>▦</i>Data</button>
     <button class="rail-item" data-view="vendors" data-paid="1"><i>◫</i>Vendors</button>
     <button class="rail-item" data-view="projects"><i>▥</i>Projects</button>
-    <button class="rail-item" data-view="lifecycle"><i>◌</i>Lifecycle</button>
     <button class="rail-item" data-view="process" data-paid="1"><i>§</i>Process</button>
     <button class="rail-item" data-view="budget" data-paid="1"><i>▮</i>Budget</button>
     <button class="rail-item" data-view="oversight" data-paid="1"><i>◈</i>Oversight</button>
     <button class="rail-item" data-view="integrity" data-paid="1"><i>✓</i>Integrity</button>
     <button class="rail-item" data-view="audit"><i>⛓</i>History</button>
+    <!-- Renamed from Lifecycle and moved to the end at the team's request
+         (Oct 2026): it is a reference page, not a step in the work, so it sat
+         awkwardly in the middle of the stack. The view key stays `lifecycle`. -->
+    <button class="rail-item" data-view="lifecycle"><i>◌</i>Guide</button>
     <!-- One line. It was three, and on a short window those three lines were
          what pushed a navigation item off the bottom of the rail. The
          Subscription page above says all of it properly — what the modules
@@ -268,6 +275,7 @@
 <div class="tour-card" id="tourCard" role="dialog" aria-modal="true"
      aria-labelledby="tourTitle" hidden></div>
 
+<script src="/assets/home.js"></script>
 <script src="/assets/onboard.js"></script>
 <script src="/assets/welcome.js"></script>
 <script src="/assets/launcher.js"></script>

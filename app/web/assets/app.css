@@ -25,6 +25,18 @@ body {
   flex-direction: column;
 }
 
+/* "Viewing as … — End impersonation" (app/impersonate.py). The first row of
+   the page, so everything else moves down rather than being covered; above
+   every overlay, so the way out is never hidden. Dark text on amber is
+   comfortably over the 4.5:1 WCAG minimum in light and dark mode alike. */
+.imp-bar { flex: none; position: relative; z-index: 2147483000;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap; padding: 8px 16px; background: #ffcf5a; color: #1b1b1b;
+  border-bottom: 2px solid #8a5a00; font-size: 14px; }
+.imp-bar b { font-family: inherit; }
+.imp-bar .btn { background: #1b1b1b; color: #fff; border-color: #1b1b1b; }
+.imp-bar .btn:focus-visible { outline: 3px solid #1b1b1b; outline-offset: 2px; }
+
 h1, h2, h3, b, .num { font-family: var(--serif); }
 button, input, select, textarea { font: inherit; color: inherit; }
 
@@ -2152,6 +2164,8 @@ body.booting .booting-veil {
 .vr-tri input[type="text"], .vr-tri textarea { width: 100%; box-sizing: border-box;
   min-height: 36px; font-size: 14px; }
 /* ⓘ beside a label: opens a plain explanation under it. */
+/* A question and its ⓘ, kept on one line inside the column of a .vr-field. */
+.vr-q { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
 .info-i { display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; margin-left: 6px; padding: 0; border-radius: 50%;
   border: 1px solid var(--line); background: transparent; color: inherit;

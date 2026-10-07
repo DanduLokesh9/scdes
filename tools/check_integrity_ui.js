@@ -16,6 +16,7 @@
        $env:IIA_SUBSCRIPTION = "1"; node tools/check_integrity_ui.js
 */
 
+const { harnessSession } = require("./_jsdom_boot");
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
 const path = require("path");
@@ -70,7 +71,9 @@ async function boot() {
       { email: HARNESS_EMAIL, name: "Automated walk", verified: true,
         state: "SC", agency: HARNESS_AGENCY, abbrev: "HARNESS" }),
       "scdes.welcomeSeen": "1", "scdes.tour": "seen",
-      "scdes.portal": "government" }), writable: true });
+      "scdes.portal": "government",
+      // Signed in for real: changes need a proven session now.
+      "scdes.session": await harnessSession() }), writable: true });
   Object.defineProperty(window, "sessionStorage", { value: store(), writable: true });
   window.confirm = () => true;
   window.alert = () => {};

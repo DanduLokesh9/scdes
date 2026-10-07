@@ -157,7 +157,8 @@ def _body(code: str, agency: str, minutes: int) -> tuple[str, str]:
 
 
 def send(to: str, subject: str, text: str,
-         html: str | None = None) -> dict[str, Any]:
+         html: str | None = None,
+         attachments: list[tuple[str, bytes, str]] | None = None) -> dict[str, Any]:
     """Send one message. Returns what happened, and never raises at the caller.
 
     The generic path. `send_code` was the only sender for a while and grew the
@@ -177,6 +178,12 @@ def send(to: str, subject: str, text: str,
     message.set_content(text)
     if html:
         message.add_alternative(html, subtype="html")
+    # (filename, content, "type/subtype") — e.g. the framework answers PDF the
+    # technical report carries for an organization past 70%.
+    for name, content, mime in attachments or []:
+        main, _, sub = (mime or "application/octet-stream").partition("/")
+        message.add_attachment(content, maintype=main, subtype=sub or "octet-stream",
+                               filename=name)
 
     port = int(s["port"] or 587)
     context = ssl.create_default_context()
