@@ -13,7 +13,8 @@
 set -euo pipefail
 
 APP_DIR=/opt/governingai
-DOMAIN=app.staging.governingai.us
+# Staging unless told otherwise. Production: DOMAIN=app.governingai.us bash deploy/setup_server.sh
+DOMAIN="${DOMAIN:-app.staging.governingai.us}"
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
 # --------------------------------------------------------------- packages
@@ -100,7 +101,9 @@ if sudo grep -qs "listen 443" /etc/nginx/sites-available/governingai; then
   echo "      sudo certbot --nginx -d $DOMAIN --redirect"
 else
   say "Configuring nginx for $DOMAIN"
-  sudo cp deploy/nginx/governingai.conf /etc/nginx/sites-available/governingai
+  # The template names staging; this server answers for $DOMAIN.
+  sed "s/server_name app\.staging\.governingai\.us;/server_name $DOMAIN;/" deploy/nginx/governingai.conf \
+    | sudo tee /etc/nginx/sites-available/governingai >/dev/null
   sudo ln -sf /etc/nginx/sites-available/governingai /etc/nginx/sites-enabled/governingai
   sudo rm -f /etc/nginx/sites-enabled/default
 fi

@@ -11,6 +11,8 @@ param(
   [string]$Key    = "C:\Users\dandu\Downloads\govern.pem",
   [string]$Host_  = "107.21.44.130",
   [string]$User   = "ubuntu",
+  # Staging by default. Production: -Host_ 100.51.1.190 -Key ...\govern-prod.pem -Domain app.governingai.us
+  [string]$Domain = "app.staging.governingai.us",
   [switch]$SetupOnly,
   [switch]$CodeOnly
 )
@@ -115,12 +117,12 @@ if (-not $SetupOnly) {
 
 if (-not $CodeOnly) {
   Step "Running the server bootstrap (this takes a few minutes the first time)"
-  Invoke-Expression "$ssh `"cd /opt/governingai && bash deploy/setup_server.sh`""
+  Invoke-Expression "$ssh `"cd /opt/governingai && DOMAIN=$Domain bash deploy/setup_server.sh`""
 } else {
   Step "Restarting the service"
   Invoke-Expression "$ssh `"sudo systemctl restart governingai && sleep 2 && sudo systemctl is-active governingai`""
 }
 
 Step "Done"
-Write-Host "  http://app.staging.governingai.us"
-Write-Host "  Then, for HTTPS:  ssh in and run  bash deploy/enable_tls.sh you@your.email"
+Write-Host "  http://$Domain"
+Write-Host "  Then, for HTTPS:  ssh in and run  DOMAIN=$Domain bash deploy/enable_tls.sh you@your.email"

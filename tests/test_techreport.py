@@ -64,8 +64,8 @@ def _bug(at, **extra):
 
 # ------------------------------------------------------------------ schedule
 
-def test_recipients_are_the_development_team():
-    assert techreport.recipients() == ["lokesh@iiac.ai", "dev@iiac.ai"]
+def test_recipients_are_the_gaius_team():
+    assert techreport.recipients() == ["brett@iiac.ai", "lokesh@iiac.ai", "dev@iiac.ai"]
 
 
 def test_eastern_follows_daylight_saving():
@@ -79,11 +79,11 @@ def test_nothing_before_five_eastern(sandbox):
     assert sandbox == []
 
 
-def test_sends_at_five_to_both_when_a_bug_was_reported(sandbox):
+def test_sends_at_five_to_all_three_when_a_bug_was_reported(sandbox):
     _bug(SUMMER_5PM - timedelta(hours=3))
     out = techreport.run_once(SUMMER_5PM)
     assert out["bugs"] == 1
-    assert sorted(m["to"] for m in sandbox) == ["dev@iiac.ai", "lokesh@iiac.ai"]
+    assert sorted(m["to"] for m in sandbox) == ["brett@iiac.ai", "dev@iiac.ai", "lokesh@iiac.ai"]
     assert "1 new bug report" in sandbox[0]["subject"]
 
 
@@ -100,7 +100,7 @@ def test_once_a_day_even_across_restarts(sandbox):
     techreport.run_once(SUMMER_5PM)
     techreport.run_once(SUMMER_5PM + timedelta(minutes=5))
     techreport.run_once(SUMMER_5PM + timedelta(hours=2))
-    assert len(sandbox) == 2                       # one email, two recipients
+    assert len(sandbox) == 3                       # one email, three recipients
 
 
 def test_each_bug_is_reported_once(sandbox):

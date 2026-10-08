@@ -27,8 +27,8 @@ out of the counts of what people hit.
 
 Settings, all optional, read from the server's environment:
 
-    GAIUS_REPORT_TO      comma-separated recipients (default: lokesh@iiac.ai,
-                         dev@iiac.ai)
+    GAIUS_REPORT_TO      comma-separated recipients (default: brett@iiac.ai,
+                         lokesh@iiac.ai, dev@iiac.ai)
     GAIUS_REPORT_HOUR    hour of the day, Eastern, 0–23 (default: 17)
     GAIUS_REPORT_OFF     set to 1 to stop sending
 
@@ -55,7 +55,8 @@ ROOT = Path(__file__).resolve().parent.parent
 STATE = ROOT / "data" / "techreport_state.json"
 SERVER_ERRORS = ROOT / "data" / "server_errors.jsonl"
 
-DEFAULT_TO = ("lokesh@iiac.ai", "dev@iiac.ai")
+# Brett added at the team's request, Oct 2026.
+DEFAULT_TO = ("brett@iiac.ai", "lokesh@iiac.ai", "dev@iiac.ai")
 DEFAULT_HOUR = 17
 KEEP_DAYS = 30
 MAX_ERROR_FILE = 5 * 1024 * 1024

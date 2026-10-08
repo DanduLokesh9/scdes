@@ -60,7 +60,7 @@ def test_the_day_it_happens_the_email_goes_even_with_no_bugs(world):
     out = techreport.run_once(FIVE_PM)
     assert out["ran"] and world, out
     to = sorted({m[0] for m in world})
-    assert to == ["dev@iiac.ai", "lokesh@iiac.ai"]
+    assert to == ["brett@iiac.ai", "dev@iiac.ai", "lokesh@iiac.ai"]
     subject, text, html = world[0][1], world[0][2], world[0][3]
     assert "2 frameworks past 70%" in subject
     assert "REACHED 70% OF THE FRAMEWORK" in text and "Rebecca Valencia" in text and "98%" in text
@@ -109,7 +109,7 @@ def test_answers_that_left_by_email_are_logged(world):
     rows = [json.loads(l) for l in audit.DEFAULT_LOG.read_text().splitlines()]
     sent = [r for r in rows if r["action"] == "framework_answers_emailed"]
     assert sorted(r["detail"]["about"] for r in sent) == ["sc.des", "sc.ed"]
-    assert sent[0]["detail"]["to"] == ["lokesh@iiac.ai", "dev@iiac.ai"]
+    assert sent[0]["detail"]["to"] == ["brett@iiac.ai", "lokesh@iiac.ai", "dev@iiac.ai"]
 
 
 def test_the_mark_can_be_set(world, monkeypatch):
