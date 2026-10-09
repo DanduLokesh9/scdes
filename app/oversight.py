@@ -45,7 +45,7 @@ LEVEL_RULES = {
         "label": "Level 3 — severe",
         "route": ("Immediate suspension, executive notification and General "
                   "Counsel involvement, in addition to the Level 2 obligations. "
-                  "Delegated federal programme notification may apply."),
+                  "Delegated federal program notification may apply."),
         "council": True, "executive": True,
         "citation": ("SCDES AI Operations Manual §22.5 (Level 3 Procedure); "
                      "§22.8 (Delegated Federal Program Notification)"),
@@ -132,7 +132,7 @@ def _obligations(level: int, project) -> list[dict[str, Any]]:
             {"what": "Notify the executive and General Counsel",
              "due": (now + timedelta(hours=24)).isoformat(timespec="seconds"),
              "done": False, "citation": rule["citation"]},
-            {"what": "Assess delegated federal programme notification",
+            {"what": "Assess delegated federal program notification",
              "due": (now + timedelta(hours=72)).isoformat(timespec="seconds"),
              "done": False,
              "citation": "SCDES AI Operations Manual §22.8"},

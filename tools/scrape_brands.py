@@ -1,17 +1,17 @@
-"""Scrape each state environmental agency's live site for its real brand colours.
+"""Scrape each state environmental agency's live site for its real brand colors.
 
 Most state environmental agencies publish no brand guide and no hex values. But
 every one of them runs a website, and that site's stylesheet *is* the agency's
 operative visual identity — in practice more current than a PDF filed in 2014.
 
 Method
-    fetch the homepage → follow its stylesheets → collect every colour →
-    weight by how the colour is used (header, nav, primary button, link) →
+    fetch the homepage → follow its stylesheets → collect every color →
+    weight by how the color is used (header, nav, primary button, link) →
     drop greys, near-whites and near-blacks → map the survivors onto the eight
     palette slots the application themes with.
 
 Provenance is recorded per state: the URL, the date, and how many slots were
-actually filled from the site rather than generated. A colour taken from a live
+actually filled from the site rather than generated. A color taken from a live
 site is evidence, not a brand guide, and the app says so.
 
 Run:  python tools/scrape_brands.py            # all states
@@ -238,7 +238,7 @@ FRAMEWORK_DEFAULTS = {
 
 
 def interesting(hex_colour: str) -> bool:
-    """Brand colours are saturated, mid-toned, and not a framework default."""
+    """Brand colors are saturated, mid-toned, and not a framework default."""
     if hex_colour in FRAMEWORK_DEFAULTS:
         return False
     _, s, l = _hsl(hex_colour)
@@ -246,7 +246,7 @@ def interesting(hex_colour: str) -> bool:
 
 
 def harvest(css: str) -> dict[str, float]:
-    """Score every colour in a stylesheet by how brand-ish its context is."""
+    """Score every color in a stylesheet by how brand-ish its context is."""
     scores: dict[str, float] = {}
     for block in re.split(r"[}\n]", css):
         weight = 3.0 if _STRONG.search(block) else 1.0
@@ -291,7 +291,7 @@ def distinct(ranked: list[str], minimum_gap: float = 0.055) -> list[str]:
 
 
 def to_brand(ranked: list[str]) -> list[str]:
-    """The agency's colours, most prominent first. No padding, no synthesis."""
+    """The agency's colors, most prominent first. No padding, no synthesis."""
     return distinct(ranked)
 
 
@@ -327,7 +327,7 @@ def scrape(code: str, url: str) -> dict:
     # thin result up as a brand.
     if len(brand) < 2:
         result["error"] = (f"only {len(brand)} distinct non-framework "
-                           f"colour(s) found — not enough to theme with")
+                           f"color(s) found — not enough to theme with")
         return result
 
     result.update(ok=True, colours=brand)
@@ -351,9 +351,9 @@ SHARED_COLOUR_LIMIT = 3
 
 
 def drop_shared(results: list[dict]) -> dict[str, int]:
-    """Remove colours common to several agencies. Returns what was dropped.
+    """Remove colors common to several agencies. Returns what was dropped.
 
-    Mutates each result's `colours` in place, and marks an agency failed if too
+    Mutates each result's `colors` in place, and marks an agency failed if too
     little of its own is left — better to show a neutral placeholder and say so
     than to theme a state in someone else's framework defaults.
     """
@@ -369,7 +369,7 @@ def drop_shared(results: list[dict]) -> dict[str, int]:
         r["colours"] = [c for c in r["colours"] if c not in shared]
         if len(r["colours"]) < 2:
             r["ok"] = False
-            r["error"] = ("nothing left after removing colours shared with other "
+            r["error"] = ("nothing left after removing colors shared with other "
                           "agencies — the site is framework defaults throughout")
     return shared
 
@@ -391,7 +391,7 @@ def main(argv: list[str]) -> int:
         if r["ok"]:
             shown = " ".join(r["colours"][:6])
             more = f" +{len(r['colours']) - 6}" if len(r["colours"]) > 6 else ""
-            print(f"  {r['code']}  {len(r['colours']):>2} colours  "
+            print(f"  {r['code']}  {len(r['colours']):>2} colors  "
                   f"{r['stylesheets']} css  {shown}{more}")
         else:
             print(f"  {r['code']}  FAILED  {r['error'][:70]}")
@@ -400,11 +400,11 @@ def main(argv: list[str]) -> int:
     print(f"\n{len(ok)}/{len(results)} scraped · raw saved to {RAW.name}")
     if ok:
         counts = [len(r["colours"]) for r in ok]
-        print(f"colours per agency: min {min(counts)}, max {max(counts)}, "
+        print(f"colors per agency: min {min(counts)}, max {max(counts)}, "
               f"mean {sum(counts) / len(counts):.1f}")
     if shared:
         top = sorted(shared.items(), key=lambda kv: -kv[1])
-        print(f"\ndropped {len(shared)} colours shared by "
+        print(f"\ndropped {len(shared)} colors shared by "
               f"{SHARED_COLOUR_LIMIT}+ agencies — framework/CMS defaults, "
               f"not anybody's brand:")
         for colour, n in top[:14]:
@@ -413,14 +413,14 @@ def main(argv: list[str]) -> int:
             print(f"  … and {len(top) - 14} more")
 
     lines = [
-        "# Brand colours scraped from each agency's live website.",
+        "# Brand colors scraped from each agency's live website.",
         "# Generated by tools/scrape_brands.py — re-run to refresh.",
         "#",
-        "# Each entry lists exactly the colours that agency uses, most prominent",
-        "# first. Nothing is padded to a fixed length and nothing is synthesised:",
-        "# an agency with four colours gets four. Interface roles are filled by",
-        "# reusing these (see app/theme.py), and status colours are universal, so",
-        "# no colour here was invented to fill a gap.",
+        "# Each entry lists exactly the colors that agency uses, most prominent",
+        "# first. Nothing is padded to a fixed length and nothing is synthesized:",
+        "# an agency with four colors gets four. Interface roles are filled by",
+        "# reusing these (see app/theme.py), and status colors are universal, so",
+        "# no color here was invented to fill a gap.",
         "#",
         "# This is evidence of visual identity, not a ratified brand guide. An",
         "# agency can replace any entry with its own official values.",

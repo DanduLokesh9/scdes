@@ -22,6 +22,15 @@ const TOUR = { at: 0, steps: [], onDone: null };
 const tourEsc = (s) => String(s ?? "").replace(/[&<>"]/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+/* Whatever this agency calls the body that holds the decision. app.js owns the
+   answer; this reads it if app.js loaded, and names no shape at all if it did
+   not — the tour has to survive app.js failing, which is when somebody most
+   wants it. */
+function tourWhoDecides() {
+  return (window.whoDecides && window.whoDecides())
+    || "whoever holds the decision";
+}
+
 const TOUR_STEPS = [
   {
     target: ".tb-brand",
@@ -59,18 +68,21 @@ const TOUR_STEPS = [
   {
     target: "#modeChip",
     title: "The governance mode",
-    body: '"Tuning open" means the Office of Technology can still move ' +
-          'parameters. Once the Council adopts them it becomes "Guardrails ' +
-          'live", and from then on even OT must route a change through the ' +
-          "Council. This is a one-way door.",
+    // `body` may be a function, resolved when the step is drawn — see
+    // drawTour(). The deciding body is not known when this array is defined,
+    // and hardcoding "Council" here told every agency it had one.
+    body: () => '"Tuning open" means the Office of Technology can still move '
+          + `parameters. Once ${tourWhoDecides()} adopts them it becomes `
+          + '"Guardrails live", and from then on even OT must route a change '
+          + `through ${tourWhoDecides()}. This is a one-way door.`,
   },
   {
     target: "#integrityChip",
     title: "What is wrong with the record",
-    body: "A standing audit of the corpus itself: citations that do not " +
-          "resolve, dates left blank, duties assigned to roles the framework " +
-          "never established. It reports and proposes — correcting an adopted " +
-          "instrument is a Council amendment.",
+    body: () => "A standing audit of the corpus itself: citations that do not "
+          + "resolve, dates left blank, duties assigned to roles the framework "
+          + "never established. It reports and proposes — correcting an adopted "
+          + `instrument is an amendment for ${tourWhoDecides()}.`,
   },
   {
     target: "#spine",
@@ -93,11 +105,18 @@ const TOUR_STEPS = [
           "and where a value was derived rather than stated, it says so.",
   },
   {
-    target: "#reason",
+    // Was the reason column, which is now inside the help panel. Pointing at
+    // the button that opens it is the honest equivalent.
+    target: "#guideDock",
     title: "…and why",
-    body: "Always the reason for what is on the left, with the section it " +
-          "cites. Explainability is part of the frame rather than a panel you " +
-          "go looking for.",
+    // Rewritten with the panel it now points at. The old copy said
+    // explainability was "part of the frame rather than a panel you go looking
+    // for" — which stopped being true the moment the frame became a panel, and
+    // a tour that describes the previous version of a screen is worse than no
+    // tour.
+    body: "Every screen can say why it exists and which section it cites. Ask " +
+          "here — “What is this screen?” — along with the walkthrough, " +
+          "the shortcuts, and reporting anything that looks wrong.",
   },
 ];
 
@@ -148,7 +167,7 @@ function drawTour() {
   node.classList.add("tour-lit");
 
   // The mask is four panels around the target rather than one box with a hole,
-  // so the spotlit element stays fully interactive and keeps its own colours.
+  // so the spotlit element stays fully interactive and keeps its own colors.
   const r = node.getBoundingClientRect();
   const pad = 6;
   const box = { top: r.top - pad, left: r.left - pad,
@@ -164,7 +183,7 @@ function drawTour() {
   card.innerHTML = `
     <p class="tour-count">${TOUR.at + 1} of ${TOUR.steps.length}</p>
     <h3 id="tourTitle">${tourEsc(step.title)}</h3>
-    <p>${tourEsc(step.body)}</p>
+    <p>${tourEsc(typeof step.body === "function" ? step.body() : step.body)}</p>
     <div class="tour-actions">
       <button class="btn ghost" id="tourSkip" type="button">Skip</button>
       <span class="tour-spacer"></span>
@@ -209,11 +228,11 @@ function placeTourCard(card, box) {
     left = box.left + box.width / 2 - cw / 2;
   } else if (fitsRight || fitsLeft) {
     left = fitsRight ? box.left + box.width + gap : box.left - gap - cw;
-    // Align near the top of a tall target rather than its centre, so the card
+    // Align near the top of a tall target rather than its center, so the card
     // sits beside the part of it the reader is looking at.
     top = Math.min(box.top, H - ch - edge);
   } else {
-    // Nowhere clear: centre it and accept the overlap. The card is above the
+    // Nowhere clear: center it and accept the overlap. The card is above the
     // spotlight in the stacking order, so it stays readable.
     top = (H - ch) / 2;
     left = (W - cw) / 2;

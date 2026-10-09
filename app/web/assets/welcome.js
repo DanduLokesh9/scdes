@@ -28,7 +28,7 @@ const WELCOME_SEGMENTS = [
     at: 10,
     kicker: "The idea",
     title: "The framework is the brain.",
-    body: "Your risk model, your approval gates, your vocabulary, your required " +
+    body: "Your levels of scrutiny, your approval gates, your vocabulary, your required " +
           "forms — every one of them is read out of the framework you adopt. " +
           "Nothing here is invented.",
     art: "brain",
@@ -102,7 +102,11 @@ function welcomeArt(kind) {
       return `<svg viewBox="0 0 260 150">
         <circle cx="130" cy="72" r="34" class="wa-core"/>
         <text x="130" y="77" class="wa-core-t">FRAMEWORK</text>
-        ${["Registry", "Lifecycle", "Budget", "Council"].map((l, i) => {
+        ${["Registry", "Lifecycle", "Budget",
+           // The fourth spoke is whatever this agency calls the body that holds
+           // the decision — "Council" is one answer to that, not the label.
+           (window.whoDecidesLabel && window.whoDecidesLabel()) || "Who decides"
+          ].map((l, i) => {
           const a = (-135 + i * 90) * Math.PI / 180;
           const x = 130 + 92 * Math.cos(a), y = 72 + 52 * Math.sin(a);
           return `<line x1="${130 + 34 * Math.cos(a)}" y1="${72 + 34 * Math.sin(a)}"
@@ -189,7 +193,8 @@ function drawWelcome() {
         <div class="wel-actions">
           <button class="btn ghost" id="welPlay" type="button">${
             WEL.playing ? "Pause" : "Play"}</button>
-          <button class="btn ghost" id="welSkip" type="button">Skip</button>
+          <button class="btn ghost" id="welNext" type="button"${
+            index >= WELCOME_SEGMENTS.length - 1 ? " disabled" : ""}>Next</button>
           <button class="btn" id="welGo" type="button">${
             left > 0 ? `Continue &nbsp;<small>${left}s</small>` : "Continue"}</button>
         </div>
@@ -198,7 +203,7 @@ function drawWelcome() {
 
   document.getElementById("welPlay").onclick = () =>
     WEL.playing ? pauseWelcome() : playWelcome();
-  document.getElementById("welSkip").onclick = () => endWelcome();
+  document.getElementById("welNext").onclick = () => nextWelcome();
   document.getElementById("welGo").onclick = () => endWelcome();
 }
 
@@ -216,6 +221,31 @@ function playWelcome() {
     drawWelcome();
   }, 500);
   drawWelcome();
+}
+
+/* Advance a segment.
+
+   The button here used to say Skip and call `endWelcome()` — the same thing
+   Continue does. Two controls, one behavior, and neither of them let you move
+   through the intro at your own pace: your only options were to watch it at ten
+   seconds a slide or leave.
+
+   Next jumps to the start of the following segment and keeps playing if it was
+   playing, so reading ahead does not also mean losing the timer. Continue is
+   still the way out, which leaves one button per intention rather than two for
+   the same one. */
+function nextWelcome() {
+  const index = WELCOME_SEGMENTS.findIndex((s, i) => {
+    const end = i + 1 < WELCOME_SEGMENTS.length
+      ? WELCOME_SEGMENTS[i + 1].at : WELCOME_TOTAL;
+    return WEL.t < end;
+  });
+  const next = WELCOME_SEGMENTS[index + 1];
+  if (!next) { drawWelcome(); return; }
+  WEL.t = next.at;
+  // Nudge past the boundary so the segment lookup lands on the new one rather
+  // than the edge of the old.
+  if (WEL.playing) playWelcome(); else drawWelcome();
 }
 
 function pauseWelcome() {

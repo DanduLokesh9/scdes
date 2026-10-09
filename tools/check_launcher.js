@@ -57,7 +57,7 @@ async function main() {
       errors.push(`${file} threw at load: ${e.message}`);
     }
   }
-  // Let app.js's boot finish; it initialises the launcher itself. Generous,
+  // Let app.js's boot finish; it initializes the launcher itself. Generous,
   // because boot now makes several round trips (registry, map, roster, state).
   for (let i = 0; i < 40 && !window.document.getElementById("flagPop"); i++) {
     await new Promise((r) => setTimeout(r, 150));

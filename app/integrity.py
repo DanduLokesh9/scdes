@@ -25,6 +25,7 @@ from dataclasses import dataclass, asdict, field as dc_field
 from datetime import date
 from typing import Any, Iterable
 
+from app.audit import CORPUS
 from app.ingest_docx import parse_all as parse_docs
 from app.ingest_xlsx import parse_all as parse_appendices
 
@@ -247,7 +248,7 @@ def check_naming(report: Report, docs, text, appendices) -> None:
                 title=f"{_profile().instrument_noun} {letter} is named inconsistently across documents",
                 detail=listing[:400],
                 where=sorted({w for s in variants.values() for w in s}),
-                fix=f"Standardise on the workbook title: "
+                fix=f"Standardize on the workbook title: "
                     f"\"{canonical.get(letter, '')}\".",
             )
 
@@ -653,13 +654,53 @@ CHECKS = (check_references, check_naming, check_inventory, check_dates,
           check_authorities, check_terminology)
 
 
-def audit() -> Report:
+def audit(refresh: bool = False) -> Report:
+    """Run every corpus-integrity check.
+
+    Cached, because it re-parses the whole corpus — a second on a laptop, three
+    on the instance — and the shell asks for it on every single request in order
+    to draw one chip in the header. The corpus only changes when documents are
+    loaded or a deploy replaces them, and both call `invalidate()`.
+
+    Keyed on the corpus's own mtimes rather than a bare flag, so a document
+    dropped into corpus/ while the server is running is picked up on the next
+    request without anyone remembering to invalidate anything.
+    """
+    global _cached_report, _cached_key
+    key = _corpus_fingerprint()
+    if not refresh and _cached_report is not None and _cached_key == key:
+        return _cached_report
+
     docs, text, appendices = _corpus()
     report = Report()
     report.stats["documents"] = len(docs)
     for check in CHECKS:
         check(report, docs, text, appendices)
+    _cached_report, _cached_key = report, key
     return report
+
+
+_cached_report: "Report | None" = None
+_cached_key: tuple = ()
+
+
+def _corpus_fingerprint() -> tuple:
+    """Name, size and mtime of every readable document. Cheap to compute."""
+    marks = []
+    for folder in ("framework", "manual", "appendices", "charter"):
+        directory = CORPUS / folder
+        if not directory.is_dir():
+            continue
+        for f in sorted(directory.iterdir()):
+            if f.is_file() and not f.name.startswith("~$"):
+                stat = f.stat()
+                marks.append((f.name, stat.st_size, int(stat.st_mtime)))
+    return tuple(marks)
+
+
+def invalidate() -> None:
+    global _cached_report, _cached_key
+    _cached_report, _cached_key = None, ()
 
 
 def render(report: Report) -> str:

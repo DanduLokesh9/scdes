@@ -25,6 +25,8 @@ never pretends the draft carries authority.
 
 from __future__ import annotations
 
+from app import clock  # "today" where the person is
+
 import json
 from dataclasses import dataclass, asdict, field
 from datetime import date, datetime, timezone
@@ -43,7 +45,7 @@ ADOPTION_FILE = CORPUS / "config" / "framework_adoption.json"
 LAYERS = [
     {"key": "framework", "label": "Governance Framework",
      "dir": "framework",
-     "why": "The constitution. Establishes the council, the roles, the risk "
+     "why": "The constitution. Names who decides, the roles, the risk "
             "categories and the naming everything else inherits.",
      "required": True},
     {"key": "manual", "label": "Operations Manual",
@@ -56,10 +58,11 @@ LAYERS = [
      "why": "The working instruments: the risk matrix, the intake form, the "
             "gate checklists, the registry.",
      "required": True},
-    {"key": "charter", "label": "Council charter and adoption memo",
+    {"key": "charter", "label": "Charter and adoption memo",
      "dir": "charter",
-     "why": "Evidence that a body with authority actually adopted the above, "
-            "and on what date.",
+     "why": "Evidence that whoever holds the authority actually adopted the "
+            "above, and on what date. A standing body files its charter here; "
+            "a single decision-maker files the memo appointing them.",
      "required": False},
 ]
 
@@ -104,7 +107,26 @@ class FrameworkStatus:
         return self.state in ("draft", "adopted")
 
 
+def adoption_file() -> Path:
+    """Where this agency's adoption is recorded. See app/tenant.py."""
+    from app import tenant
+    return tenant.scoped(ADOPTION_FILE)
+
+
 def _files_in(directory: str) -> list[str]:
+    """The documents in one layer — for the agency they belong to, and nobody
+    else.
+
+    There is one `corpus/` on this machine and it holds one agency's papers.
+    This used to list it for whoever asked, so every agency that registered saw
+    SCDES's framework, its operations manual and its fourteen appendices, all
+    marked present. Reported by the client, who was right that they should not
+    be visible: an agency's appendices are a function of its own framework, and
+    an empty shelf is the truthful answer before it has one.
+    """
+    from app import tenant
+    if not tenant.owns_corpus():
+        return []
     path = CORPUS / directory
     if not path.is_dir():
         return []
@@ -114,10 +136,11 @@ def _files_in(directory: str) -> list[str]:
 
 
 def _adoption() -> dict[str, Any]:
-    if not ADOPTION_FILE.is_file():
+    path = adoption_file()
+    if not path.is_file():
         return {}
     try:
-        return json.loads(ADOPTION_FILE.read_text(encoding="utf-8")) or {}
+        return json.loads(path.read_text(encoding="utf-8")) or {}
     except (ValueError, OSError):
         return {}
 
@@ -207,7 +230,7 @@ def record_adoption(actor_name: str, actor_title: str = "",
                          ". Adopting an incomplete framework would leave "
                          "screens citing documents that are not here."}
 
-    when = (adopted_on or "").strip() or date.today().isoformat()
+    when = (adopted_on or "").strip() or clock.today().isoformat()
     record = {
         "adopted_on": when,
         "adopted_by": (actor_name or "").strip()[:120],
@@ -220,8 +243,9 @@ def record_adoption(actor_name: str, actor_title: str = "",
         "verified": False,
         "record_note": "self-declared; the application was told, not shown",
     }
-    ADOPTION_FILE.parent.mkdir(parents=True, exist_ok=True)
-    ADOPTION_FILE.write_text(json.dumps(record, indent=2), encoding="utf-8")
+    path = adoption_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2), encoding="utf-8")
     return {"ok": True, "adoption": record, "status": status().as_dict()}
 
 
@@ -238,7 +262,9 @@ DEPENDENTS = [
                                        "everything downstream inherits"},
     {"screen": "Configure", "needs": "The parameters the framework leaves for the "
                                      "agency to set"},
-    {"screen": "Council", "needs": "Who sits on it, and which decisions are theirs"},
+    {"screen": "Decisions", "needs": "Who decides when a decision is gated — a "
+                                     "standing body, or one named person. The "
+                                     "answer creates the room, or leaves it out"},
 ]
 
 

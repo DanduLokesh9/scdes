@@ -155,7 +155,7 @@ def test_reopening_tuning_is_its_own_council_act(operating, log):
 
     record = mode_mod.reopen_configuration(
         members=["council.a", "council.b", "council.c"],
-        reason="Annual re-tune authorised at the March session", audit=log)
+        reason="Annual re-tune authorized at the March session", audit=log)
     assert record.mode == mode_mod.Mode.CONFIGURATION.value
     assert record.history[-1]["reason"].startswith("Annual re-tune")
 

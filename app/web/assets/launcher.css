@@ -1,4 +1,4 @@
-/* Agency launcher — the landing page.
+﻿/* Agency launcher — the landing page.
 
    The map is real geography (Census boundaries, Albers projection) and the
    flag is clipped to the country outline rather than sitting behind it, so
@@ -17,35 +17,48 @@
 
   /* Dark is the default; the light block below overrides. Kept as local
      variables so every rule reads from one place per mode. */
+  /* Warmed to sit under the same map. It was a blue-black radial, which was
+     right when the country was the flag and wrong now the country is paper —
+     a warm brown map on a cold blue page reads as two pictures. */
   --lnch-bg: radial-gradient(ellipse at 50% 20%,
-    #14303c 0%, #0b1d25 55%, #050e13 100%);
-  --lnch-ink: #eef4f5;
+    #33291d 0%, #201a12 55%, #100d09 100%);
+  --lnch-ink: #f2ece0;
   --lnch-ink-strong: #ffffff;
-  --lnch-ink-muted: #a8bcc2;
-  --lnch-ink-faint: #8ba0a6;
-  --lnch-panel: rgba(8, 22, 28, .82);
+  --lnch-ink-muted: #c0b39d;
+  --lnch-ink-faint: #a4977f;
+  --lnch-panel: rgba(26, 21, 15, .84);
   --lnch-hair: rgba(255, 255, 255, .16);
   --lnch-hair-strong: rgba(255, 255, 255, .5);
   --lnch-chip: rgba(255, 255, 255, .09);
   --lnch-swatch-edge: rgba(255, 255, 255, .22);
   --lnch-shadow: 0 18px 40px rgba(0, 0, 0, .34);
+  /* Opaque, unlike --lnch-panel: a dropdown floats over the flag, and text on a
+     translucent surface over 13 red and white stripes is unreadable. */
+  --lnch-solid: #241d14;
 
   background: var(--lnch-bg);
 }
 
 :root[data-theme="light"] .launcher {
+  /* Parchment, not white. In the reference the client supplied, the paper *is*
+     the ground: the coastline is a cut-out laid on it and the ocean names are
+     printed on the same sheet. Those labels sit outside the country clip, so a
+     white or blue-grey page would have left them floating on a different
+     surface from the map they belong to. */
   --lnch-bg: radial-gradient(ellipse at 50% 20%,
-    #ffffff 0%, #e8eff1 55%, #d3dfe3 100%);
-  --lnch-ink: #12222a;
-  --lnch-ink-strong: #08161d;
-  --lnch-ink-muted: #46595f;
-  --lnch-ink-faint: #4f6167;   /* AA over the gradient's darkest stop */
-  --lnch-panel: rgba(255, 255, 255, .9);
-  --lnch-hair: rgba(9, 30, 38, .16);
-  --lnch-hair-strong: rgba(9, 30, 38, .42);
-  --lnch-chip: rgba(9, 30, 38, .05);
-  --lnch-swatch-edge: rgba(9, 30, 38, .24);
-  --lnch-shadow: 0 14px 32px rgba(9, 30, 38, .16);
+    #f7f1e3 0%, #efe6d4 55%, #e2d7c0 100%);
+  /* Warmed to match. Cool greys on parchment read as a printing error. */
+  --lnch-ink: #241d12;
+  --lnch-ink-strong: #140f07;
+  --lnch-ink-muted: #4e4436;
+  --lnch-ink-faint: #574c3c;   /* AA over the gradient's darkest stop */
+  --lnch-panel: rgba(253, 250, 243, .92);
+  --lnch-hair: rgba(58, 46, 30, .18);
+  --lnch-hair-strong: rgba(58, 46, 30, .44);
+  --lnch-chip: rgba(58, 46, 30, .06);
+  --lnch-swatch-edge: rgba(58, 46, 30, .26);
+  --lnch-shadow: 0 14px 32px rgba(58, 46, 30, .18);
+  --lnch-solid: #fdfaf3;
 }
 
 body.launcher-open { overflow: hidden; }
@@ -134,36 +147,206 @@ body.launcher-open { overflow: hidden; }
   user-select: none; -webkit-user-select: none;
 }
 
-/* Unchanged between modes — see the note at the top of the file.
+/* The map, after the reference the client supplied: a printed push-pin travel
+   map. Parchment ground, states in muted earth tones, oceans named.
 
-   The fill used to be a 34% black scrim, which is what made the map look
-   washed out: it was mixing every stripe toward grey. State borders now read
-   from a dark stroke with a light one under it — legible over red, white and
-   blue alike — so the flag itself can stay at full strength. */
+   It replaced two earlier treatments. First the flag clipped to the country
+   outline, which was handsome and worked against the map's job — every state
+   arrived already coloured, so choosing one changed a hue rather than being the
+   only colour on screen. Then a flat slate, which fixed that and looked like a
+   wireframe.
+
+   The reason for the flat one survives here. Every tint below is desaturated
+   and warm; an agency's palette is neither, so the selected state is still the
+   only real colour on screen — more so than against blue-grey, which sat much
+   closer to the blues most agencies use. */
+/* Every value below is *sampled* from the client's reference, not eyeballed
+   from it — see tools/check_map_contrast.py for the palette it measures and
+   the method note there. The first pass was written from a visual impression
+   and was both too light and too narrow: the reference runs down to #7e7e72,
+   and that wider spread is exactly what lets it separate fifty neighbours
+   without heavy borders. */
+.mapbase { fill: #eadec6; }
+
+/* Seven tints across the reference's real range — lightest sand to darkest
+   grey-green — assigned from the state's own code in launcher.js so they never
+   shuffle between visits. Two families, warm tans and cool greys, alternating,
+   which is what stops neighbouring states reading as one shape. */
+/* Not hand-picked. The first attempt put two fills 1.03:1 apart — the same
+   colour, to any eye — so these are the seven-from-thirteen combination with
+   the largest *minimum* pairwise contrast the reference's own palette allows,
+   which is 1.16:1. Ordered by interleaving light and dark from the ends, so
+   consecutive tint numbers differ as much as possible and a hash landing on
+   neighbouring numbers still separates two adjacent states. */
+.usmap .st.tint-0 { fill: #dedec6; }   /* lightest sand    */
+.usmap .st.tint-1 { fill: #7e7e72; }   /* darkest grey     */
+.usmap .st.tint-2 { fill: #d2c6ba; }   /* pale taupe       */
+.usmap .st.tint-3 { fill: #8a8a7e; }   /* dark grey-green  */
+.usmap .st.tint-4 { fill: #baaea2; }   /* mid taupe        */
+.usmap .st.tint-5 { fill: #a2967e; }   /* warm khaki       */
+.usmap .st.tint-6 { fill: #aea28a; }   /* mid sand         */
+
 .usmap .st {
-  fill: rgba(8, 20, 28, .10);
-  stroke: rgba(10, 22, 30, .55);
-  stroke-width: .85;
+  stroke-width: .7;
   paint-order: stroke fill;
   cursor: pointer;
   transition: fill .13s ease, stroke .13s ease;
 }
+
+/* The border is inked per tint, and it has to be.
+
+   A single dark stroke cannot serve a palette this wide: at .66 alpha it clears
+   3:1 against the light sands and disappears entirely into #7e7e72, which is
+   the darkest fill and the one that needs an edge most. Each state is a button,
+   so its boundary is held to the 3:1 WCAG asks of a control — so the light
+   fills take a dark line and the dark fills take a light one, which is what a
+   printed map does too. */
+.usmap .st.tint-0, .usmap .st.tint-2,
+.usmap .st.tint-4, .usmap .st.tint-6 { stroke: rgba(44, 35, 24, .75); }
+.usmap .st.tint-5 { stroke: rgba(26, 20, 13, .82); }
+/* The two darkest fills take a light line. A dark one reached 2.4:1 on them,
+   and they are the states that need an edge most. */
+.usmap .st.tint-1,
+.usmap .st.tint-3 { stroke: rgba(253, 250, 242, .97); }
+
 .usmap .st:hover {
-  fill: rgba(255, 255, 255, .34);
-  stroke: #fff; stroke-width: 1.3;
+  fill: #fdf8ec;
+  stroke: rgba(38, 30, 20, .9); stroke-width: 1.3;
 }
+
+/* Dark mode gets the same map at night rather than a different one: the same
+   seven steps, rotated into warm browns on near-black. Inverting the parchment
+   to a cold grey would have made this the one screen in the application that
+   changes character between modes. */
+/* The same seven steps at night: the reference's own hues, held at the same
+   spacing, rotated down onto near-black. Order is preserved so a state keeps
+   its relative weight when the mode flips. */
+/* Derived from the day palette, not invented alongside it. Each fill is the
+   sampled colour moved 58% of the way toward the ground, which keeps the
+   reference's hues and its ordering — a state holds its relative weight when
+   the mode flips. Hand-written values had two fills 1.04:1 apart. */
+:root[data-theme="dark"] .mapbase { fill: #1a1610; }
+:root[data-theme="dark"] .usmap .st.tint-0 { fill: #8c8a7a; }
+:root[data-theme="dark"] .usmap .st.tint-1 { fill: #545249; }
+:root[data-theme="dark"] .usmap .st.tint-2 { fill: #857c73; }
+:root[data-theme="dark"] .usmap .st.tint-3 { fill: #5b5950; }
+:root[data-theme="dark"] .usmap .st.tint-4 { fill: #776e65; }
+:root[data-theme="dark"] .usmap .st.tint-5 { fill: #696050; }
+:root[data-theme="dark"] .usmap .st.tint-6 { fill: #706757; }
+/* Split the same way as the day palette, and for the same reason — but the
+   *other* way round. At night the fills sit above a near-black ground, so most
+   of them take a dark line; the two darkest still need a light one. That the
+   split falls on the same two tints in both modes is not luck: the night values
+   are the day values scaled, so the ordering is identical. */
+:root[data-theme="dark"] .usmap .st.tint-0,
+:root[data-theme="dark"] .usmap .st.tint-2,
+:root[data-theme="dark"] .usmap .st.tint-4,
+:root[data-theme="dark"] .usmap .st.tint-5,
+:root[data-theme="dark"] .usmap .st.tint-6 {
+  stroke: rgba(10, 8, 5, .95);
+}
+:root[data-theme="dark"] .usmap .st.tint-1,
+:root[data-theme="dark"] .usmap .st.tint-3 {
+  stroke: rgba(250, 246, 236, .9);
+}
+:root[data-theme="dark"] .usmap .st:hover {
+  fill: #6a5f4c; stroke: rgba(245, 236, 218, .75);
+}
+
+/* ------------------------------------------------------------ the oceans */
+
+.sea {
+  fill: rgba(74, 62, 46, .62);
+  font: 600 13px/1 Georgia, "Times New Roman", serif;
+  letter-spacing: 2.6px;
+  pointer-events: none;
+}
+.sea-minor {
+  font: italic 400 14px/1 Georgia, "Times New Roman", serif;
+  letter-spacing: .6px;
+}
+:root[data-theme="dark"] .sea { fill: rgba(228, 216, 192, .42); }
+
+/* ----------------------------------------------------------- the compass */
+
+.compass { pointer-events: none; }
+.compass-ring { fill: none; stroke: rgba(74, 62, 46, .5); stroke-width: 1; }
+.compass-ring.faint { stroke: rgba(74, 62, 46, .28); }
+.compass-major { fill: rgba(58, 48, 36, .72); }
+.compass-minor { fill: rgba(74, 62, 46, .34); }
+.compass-n {
+  fill: rgba(58, 48, 36, .8);
+  font: 700 11px/1 Georgia, "Times New Roman", serif;
+}
+:root[data-theme="dark"] .compass-ring { stroke: rgba(228, 216, 192, .34); }
+:root[data-theme="dark"] .compass-ring.faint { stroke: rgba(228, 216, 192, .18); }
+:root[data-theme="dark"] .compass-major { fill: rgba(232, 221, 198, .6); }
+:root[data-theme="dark"] .compass-minor { fill: rgba(232, 221, 198, .3); }
+:root[data-theme="dark"] .compass-n { fill: rgba(236, 226, 205, .7); }
+
+/* ------------------------------------------------------- federal login
+
+   A line out of the District to a flag over the Atlantic. It is a control, so
+   it gets the same three gestures and the same focus treatment as a state. */
+.fedlink { cursor: pointer; }
+.fedlink-line {
+  fill: none;
+  stroke: rgba(255, 255, 255, .5);
+  stroke-width: 1.4;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+.fedlink-dot { fill: #fff; stroke: rgba(10, 22, 30, .6); stroke-width: .8; }
+.fedlink-edge { stroke: rgba(255, 255, 255, .55); stroke-width: 1; }
+.fedlink-label {
+  fill: #fff; font-size: 13px; font-weight: 700; letter-spacing: .3px;
+  paint-order: stroke fill;
+  stroke: rgba(4, 14, 22, .65); stroke-width: 3.2;
+}
+.fedlink-flag {
+  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, .45));
+  transition: transform .13s ease;
+  transform-box: fill-box; transform-origin: center;
+}
+.fedlink:hover .fedlink-flag { transform: scale(1.05); }
+.fedlink:hover .fedlink-line { stroke: #fff; stroke-dasharray: none; }
+.fedlink:focus-visible { outline: none; }
+.fedlink:focus-visible .fedlink-edge { stroke: #fff; stroke-width: 2.6; }
+.fedlink.active .fedlink-edge { stroke: #fff; stroke-width: 2.2; }
+.fedlink.active .fedlink-line { stroke: #fff; stroke-dasharray: none; }
+
+:root[data-theme="light"] .fedlink-line { stroke: rgba(20, 34, 44, .55); }
+:root[data-theme="light"] .fedlink-label {
+  fill: #10202a; stroke: rgba(255, 255, 255, .8);
+}
+:root[data-theme="light"] .fedlink-edge { stroke: rgba(20, 34, 44, .5); }
 .usmap .st:focus-visible { outline: none; stroke: #fff; stroke-width: 2.2; }
 
+/* The selected state.
+
+   The stroke and the glow were both white, which worked when every state sat on
+   a dark flag. On parchment a white halo around a pale shape is nothing at all,
+   and this is the one mark that has to be unmistakable — it is the answer to
+   "which agency am I about to open". So it inks dark on paper and stays light
+   at night, and it is the ring rather than the fill doing the work: the fill is
+   the agency's own colours and cannot be relied on to contrast with anything. */
 .usmap .st.active {
-  stroke: #fff; stroke-width: 1.8;
-  filter: drop-shadow(0 0 9px rgba(255, 255, 255, .65));
+  stroke: #221a10; stroke-width: 2;
+  filter: drop-shadow(0 0 7px rgba(34, 26, 16, .5));
+}
+:root[data-theme="dark"] .usmap .st.active {
+  stroke: #fff8e8; stroke-width: 1.9;
+  filter: drop-shadow(0 0 9px rgba(255, 248, 232, .6));
 }
 
 /* Drawn over everything and never hit-tested, so it sharpens the coastline
    without stealing clicks from the states underneath. */
 .usmap .outline path {
-  fill: none; stroke: rgba(2, 12, 20, .45); stroke-width: 1.1;
+  fill: none; stroke: rgba(48, 38, 26, .6); stroke-width: 1.1;
   pointer-events: none; vector-effect: non-scaling-stroke;
+}
+:root[data-theme="dark"] .usmap .outline path {
+  stroke: rgba(228, 216, 192, .34);
 }
 /* A state whose corpus is actually loaded is marked, not merely themed. Uses
    the universal ok colour, not a brand colour: it means something. */
@@ -464,6 +647,20 @@ body.onboarding { overflow: hidden; }
   border: 1px solid var(--alert);
 }
 
+/* A wrong code: the Verify button shakes once. The words in .signin-error
+   say what happened; the shake only draws the eye, so it is dropped for
+   anybody who has asked for less motion. */
+@keyframes signin-shake {
+  0%, 100% { transform: translateX(0); }
+  15%, 55% { transform: translateX(-7px); }
+  35%, 75% { transform: translateX(7px); }
+  90% { transform: translateX(-3px); }
+}
+.signin-shake { animation: signin-shake 0.42s ease-in-out; }
+@media (prefers-reduced-motion: reduce) {
+  .signin-shake { animation: none; }
+}
+
 
 /* States not yet open. Drawn so the reach is visible, plainly not clickable so
    nobody starts a registration the platform cannot honour. */
@@ -492,4 +689,187 @@ body.onboarding { overflow: hidden; }
 .lnch-closed {
   display: block; margin-top: 8px; font-size: 12px;
   color: var(--lnch-ink-muted); max-width: 62ch;
+}
+
+
+/* Registration and verification. Nothing is pre-filled and there are no sample
+   placeholders — a greyed-out "Jane Smith" reads as a suggestion and ends up
+   submitted, and this name goes on a governance record. */
+.signin-attest {
+  display: flex; gap: 9px; align-items: flex-start; margin: 12px 0 0;
+  font-size: 12px; line-height: 1.5; color: var(--lnch-ink-muted);
+  cursor: pointer;
+}
+.signin-attest input { margin-top: 2px; flex: none; }
+.signin-field em { font-style: normal; font-weight: 400; color: var(--lnch-ink-muted); }
+
+/* The code is displayed because this build cannot send mail. Styled as a
+   scaffold, not a feature, so nobody mistakes it for the finished flow. */
+.signin-code {
+  display: flex; align-items: center; gap: 12px; justify-content: space-between;
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 9px;
+  background: var(--warn-fill); border: 1px dashed var(--warn);
+}
+.signin-code span { font-size: 11.5px; line-height: 1.45; color: var(--lnch-ink-muted); }
+.signin-code b {
+  font-family: Consolas, monospace; font-size: 22px; letter-spacing: 3px;
+  color: var(--lnch-ink-strong); flex: none;
+}
+
+/* A code that could not be sent.
+ *
+ * Not the dashed warning box the shown-code uses: that one says "here is
+ * something you can use", and this says "nothing arrived and nothing will
+ * until somebody fixes it". Solid, alert-bordered, and it carries no code —
+ * see `mailer.may_show_code`. */
+.signin-undelivered {
+  display: flex; flex-direction: column; gap: 5px;
+  margin: 0 0 12px; padding: 11px 13px; border-radius: 9px;
+  background: var(--warn-fill);
+  border: 1px solid var(--alert, #b3261e); border-left-width: 3px;
+}
+.signin-undelivered b {
+  font-size: 12.5px; color: var(--lnch-ink-strong);
+}
+.signin-undelivered span {
+  font-size: 11.5px; line-height: 1.5; color: var(--lnch-ink-muted);
+}
+
+/* ------------------------------------------------------- the agency combobox
+
+   149 agencies. A native <select> cannot be typed into, so finding yours meant
+   scrolling a list that ran off the bottom of the screen. This is an input with
+   a filtered list under it — type "DES", or "environmental", or "SCDES".
+
+   Every colour here reads from the --lnch-* tokens, which flip with the theme.
+   The first version hardcoded white borders and a #10222b list, which was
+   invisible on the light panel: a white field on a white card, white
+   placeholder text, and a dark dropdown that belonged to a different design.  */
+
+.combo { position: relative; width: 100%; max-width: 460px; }
+
+.combo input {
+  width: 100%; padding: 9px 30px 9px 11px; border-radius: 8px;
+  border: 1px solid var(--lnch-hair-strong);
+  background: var(--lnch-solid);
+  color: var(--lnch-ink-strong);
+  font-size: 13px;
+}
+.combo input::placeholder { color: var(--lnch-ink-muted); opacity: 1; }
+.combo input:focus-visible {
+  outline: 2px solid var(--accent-text); outline-offset: 1px;
+  border-color: transparent;
+}
+
+.combo-clear {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 50%; line-height: 1;
+  color: var(--lnch-ink-muted); font-size: 15px;
+}
+.combo-clear:hover { color: var(--lnch-ink-strong); background: var(--lnch-chip); }
+
+.combo-list {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px);
+  margin: 0; padding: 4px; list-style: none; max-height: 264px;
+  overflow-y: auto; border-radius: 10px;
+}
+/* Flipped above the input when the panel is too near the bottom of the window
+   to show the list beneath it. placeList() decides, per open. */
+.combo-list.up {
+  top: auto; bottom: calc(100% + 4px);
+}
+.combo-list {
+  background: var(--lnch-solid);
+  border: 1px solid var(--lnch-hair);
+  box-shadow: var(--lnch-shadow);
+  color: var(--lnch-ink);
+}
+.combo-list li {
+  display: flex; align-items: baseline; gap: 9px; padding: 7px 9px;
+  border-radius: 6px; cursor: pointer; font-size: 12.5px;
+}
+/* Hover and keyboard share one treatment, so the arrow keys and the mouse
+   cannot disagree about which row is next. */
+.combo-list li:hover,
+.combo-list li.on { background: var(--lnch-chip); }
+.combo-list li.on { outline: 1px solid var(--lnch-hair-strong); }
+.combo-list li b {
+  flex: none; min-width: 62px; font-size: 11px; letter-spacing: .3px;
+  color: var(--accent-text);
+}
+.combo-list li span { flex: 1; color: var(--lnch-ink); }
+.combo-list li em {
+  flex: none; font-style: normal; font-size: 10px; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--lnch-ink-muted);
+}
+.combo-none {
+  padding: 9px; font-size: 12px; color: var(--lnch-ink-muted); cursor: default;
+}
+.combo-none:hover { background: none; }
+/* "Other" — last in every list, set apart from the agencies above it. */
+.combo-list li.combo-other {
+  margin-top: 4px; border-top: 1px solid var(--lnch-hair-strong);
+  border-radius: 0 0 6px 6px;
+}
+
+/* --------------------------------------------------------------- the NDA
+
+   Shown between mailbox verification and the product, because everything
+   inside is IIA's confidential material. The document is embedded rather than
+   linked: an agreement you have to leave the page to read is an agreement
+   nobody reads, and the acceptance is recorded as evidence of having read it. */
+
+.nda-doc {
+  margin: 12px 0 8px; height: 320px; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--lnch-hair);
+  /* White regardless of theme — a PDF page is white, and a dark frame around
+     it reads as a rendering fault rather than a design choice. */
+  background: #ffffff;
+}
+.nda-doc object { width: 100%; height: 100%; border: 0; display: block; }
+.nda-fallback {
+  margin: 0; padding: 22px; font-size: 12.5px; line-height: 1.6;
+  color: #12222a; text-align: center;
+}
+.nda-fallback a { color: #1c5f7a; }
+
+.nda-meta {
+  margin: 0 0 4px; font-size: 11px; color: var(--lnch-ink-muted);
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+}
+.nda-meta a { color: var(--accent-text); }
+.nda-meta .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; opacity: .75;
+}
+
+/* The signin card holds a 320px document now, so it needs room to scroll
+   rather than pushing its own buttons off the bottom of the viewport. */
+.signin-card { max-height: 92vh; overflow-y: auto; }
+
+/* Register was the only door; this is the other one. Quiet, because most people
+   arriving here are new — but present, because the person who registered the
+   agency and then signed out had nowhere to go. */
+.signin-alt {
+  margin: 12px 0 0; font-size: 12px; color: var(--lnch-ink-muted);
+  text-align: center;
+}
+.linkish {
+  color: var(--accent-text); text-decoration: underline;
+  font-size: 12px; padding: 0;
+}
+.linkish:hover { opacity: .8; }
+
+/* "Don't see your governmental unit?" — under the Enter button on the state
+   panel. A link-weight control rather than a second primary button, so the
+   listed agency stays the obvious first choice, but with the action in bold
+   so it reads as something to press and not a footnote. */
+.lnch-unlisted { margin-top: 10px; text-align: left; }
+.lnch-unlisted .linkish { font-size: 12.5px; line-height: 1.4; text-align: left; }
+.lnch-unlisted .linkish b { font-weight: 700; }
+.linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A line of help under a field, read by a screen reader after the label. */
+.signin-hint {
+  margin: -4px 0 10px; font-size: 11.5px; color: var(--lnch-ink-muted);
 }

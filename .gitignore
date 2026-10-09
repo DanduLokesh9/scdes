@@ -1,0 +1,22 @@
+# Live records and secrets: never in the repository.
+data/
+corpus/audit/
+corpus/config/framework_adoption.json
+corpus/config/framework_versions.json
+*.bak
+*.bak-*
+*.preseparation.bak
+.env
+.env.*
+.gaius_tok
+*.log
+*.err
+# Generated.
+__pycache__/
+.pytest_cache/
+node_modules/
+.bundle1/
+.venv/
+# One-off helper scripts and probe documents at the top level.
+/_*.py
+/_*.docx

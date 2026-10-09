@@ -8,7 +8,8 @@
 
 set -euo pipefail
 
-DOMAIN=app.staging.governingai.us
+# Staging unless told otherwise. Production: DOMAIN=app.governingai.us bash deploy/enable_tls.sh you@iiac.ai
+DOMAIN="${DOMAIN:-app.staging.governingai.us}"
 EMAIL="${1:-}"
 
 if [ -z "$EMAIL" ]; then

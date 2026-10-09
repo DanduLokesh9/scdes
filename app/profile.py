@@ -4,7 +4,7 @@ This application is not an SCDES application. It is a governance-operating
 application that is *pointed at* an agency's adopted corpus. Nothing about a
 particular agency belongs in code: not its name, not its bureaus, not how many
 instruments it adopted, not what it calls them, not its gate structure, not its
-statutory programmes, not its adoption date.
+statutory programs, not its adoption date.
 
 All of that is **discovered** from the corpus on first run and written to
 `corpus/config/agency.yaml`, which a human then confirms. Discovery is by
@@ -456,10 +456,10 @@ _NOT_A_PROGRAMME = {
 
 
 def _discover_programmes(text: str, exclude: set[str] | None = None) -> list[str]:
-    """Statutory or delegated programmes this agency actually names.
+    """Statutory or delegated programs this agency actually names.
 
     Case-sensitive on purpose: these are acronyms, and matching case-insensitively
-    turns "and", "for" and "the" into statutory programmes.
+    turns "and", "for" and "the" into statutory programs.
     """
     found = Counter()
     for m in re.finditer(r"\b([A-Z]{3,8})\b\s*(?:/|,|\s)\s*"

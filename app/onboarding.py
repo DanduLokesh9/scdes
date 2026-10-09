@@ -26,6 +26,7 @@ feature:
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 from dataclasses import dataclass, asdict
@@ -42,7 +43,21 @@ PORTALS: dict[str, dict[str, Any]] = {
         "key": "government",
         "label": "Government or non-profit",
         "blurb": "State, local, tribal or federal agencies, and non-profit "
-                 "organisations operating a governance framework.",
+                 "organizations operating a governance framework.",
+        "open": True,
+    },
+    # A public body whose mail is not on .gov, .us or .org — a city on
+    # cityofmonticello.net, a utility district, a court on scalc.net. The
+    # suffix rule turned these away before they reached the map; they register
+    # themselves as an organization not on the list, and the code sent to
+    # their mailbox is what proves the address is theirs.
+    "other": {
+        "key": "other",
+        "label": "Other public body",
+        "blurb": "A city, town, district, court or other public organization "
+                 "whose email is not on a .gov, .us or .org address. You add "
+                 "your organization yourself, and a code sent to your work "
+                 "email confirms it is yours.",
         "open": True,
     },
     "business": {
@@ -61,6 +76,39 @@ ELIGIBLE_SUFFIXES = (".gov", ".mil", ".edu", ".us", ".org", ".int")
 
 #: Restricted registries — these genuinely evidence the sector.
 STRONG_SUFFIXES = (".gov", ".mil", ".edu")
+
+#: Exact domains the client's own registry vouches for, checked *in addition*
+#: to the suffix rule and never instead of it.
+#:
+#: The suffix rule turns away fifteen bodies in the client's own list, because
+#: not every government organisation sits on a restricted registry: the SC
+#: Administrative Law Court is `scalc.net`, the DMV is `scdmvonline.com`,
+#: Amtrak is `amtrak.com`, Santee Cooper is `santeecooper.com`. Refusing a
+#: judge or a DMV administrator with "you need a .gov address" is wrong, and
+#: loosening the suffix rule to admit `.com` would be worse. A named list is
+#: the narrow fix: it admits exactly the organisations the client identified
+#: and nobody else.
+_ALLOWLIST_FILE = (Path(__file__).resolve().parent / "data"
+                   / "domain_allowlist.json")
+
+
+@functools.lru_cache(maxsize=1)
+def _allowlist() -> dict[str, dict[str, str]]:
+    try:
+        raw = json.loads(_ALLOWLIST_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}                     # the suffix rule alone still works
+    return raw.get("domains", {})
+
+
+def allowlisted(domain: str) -> dict[str, str] | None:
+    """What the registry says about this domain, or None.
+
+    Exact match only. A suffix match here would make `notreally-amtrak.com`
+    eligible, which is the whole reason this is a list of names rather than a
+    pattern.
+    """
+    return _allowlist().get((domain or "").strip().lower())
 
 #: Deliberately named so the refusal can explain itself. A consumer mailbox is
 #: the most common wrong answer, and "use your work address" is more use than
@@ -107,18 +155,37 @@ def check_email(email: str, portal: str = "government") -> Eligibility:
 
     domain = address.rsplit("@", 1)[1]
 
+    # Any address at all — the same rule as the unlisted registration it leads
+    # to, where a twelve-person district may run on a personal mailbox. There
+    # is no suffix to check; the code sent to the mailbox is the proof. A
+    # personal mailbox is recorded as such, so nobody later mistakes it for
+    # an organization's own domain.
+    if portal == "other":
+        return Eligibility(True, domain=domain,
+                           evidence="other-personal" if domain in CONSUMER_DOMAINS
+                           else "other")
     if domain in CONSUMER_DOMAINS:
         return Eligibility(False, "That is a personal mailbox. Use your "
-                                  "organisation's address.", domain=domain)
-    if not domain.endswith(ELIGIBLE_SUFFIXES):
+                                  "organization's address, or go Back and "
+                                  "choose Other public body.", domain=domain)
+    vouched = allowlisted(domain)
+    if not domain.endswith(ELIGIBLE_SUFFIXES) and not vouched:
         allowed = ", ".join(ELIGIBLE_SUFFIXES)
         return Eligibility(
             False,
-            f"The government and non-profit portal needs an address ending in "
-            f"{allowed}. Businesses will have their own portal.",
+            f"This option needs an address ending in {allowed}. If you work "
+            f"for a public body whose email is on another address, go Back "
+            f"and choose Other public body.",
             domain=domain)
 
-    evidence = "restricted" if domain.endswith(STRONG_SUFFIXES) else "open"
+    if domain.endswith(STRONG_SUFFIXES):
+        evidence = "restricted"
+    elif vouched:
+        # Named in the client's own registry. Stronger evidence than a suffix,
+        # which anyone can buy — this one says which body it belongs to.
+        evidence = "listed"
+    else:
+        evidence = "open"
     return Eligibility(True, domain=domain, evidence=evidence)
 
 
@@ -167,6 +234,6 @@ def summary() -> dict[str, Any]:
         "notice": ("Eligibility is checked, not verified. No confirmation email "
                    "is sent — this build has no mail path — so an address here "
                    "records what was claimed rather than proving it. In "
-                   "production this step federates with the organisation's own "
+                   "production this step federates with the organization's own "
                    "identity provider."),
     }

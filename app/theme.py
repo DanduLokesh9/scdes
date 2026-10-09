@@ -1,32 +1,32 @@
-"""Build an interface theme from however many colours an agency actually has.
+"""Build an interface theme from however many colors an agency actually has.
 
 The earlier design mapped every agency onto a fixed eight-slot palette and
-synthesised whatever was missing. That was wrong in a way worth recording,
-because it is a tempting mistake: the synthesised colours were produced by the
-same recipe for every agency, so a state with four real colours ended up
+synthesized whatever was missing. That was wrong in a way worth recording,
+because it is a tempting mistake: the synthesized colors were produced by the
+same recipe for every agency, so a state with four real colors ended up
 four-parts itself and four-parts house style. The filler dominated the
 impression and the states converged toward looking alike — the opposite of the
 point of theming per agency.
 
-So: no padding and no synthesis. Whatever the agency uses, N colours, is the
-brand. Interface roles are filled by *reusing* those N. When N is small a colour
+So: no padding and no synthesis. Whatever the agency uses, N colors, is the
+brand. Interface roles are filled by *reusing* those N. When N is small a color
 serves several roles, which is what small brands do in practice and reads as
 deliberate rather than diluted.
 
 Two things are deliberately *not* taken from the brand:
 
-  Status colours are universal. Low / Moderate / High risk are the same in all
+  Status colors are universal. Low / Moderate / High risk are the same in all
   fifty states. This is better than theming them — a governance record where
   "High risk" is maroon in one state and olive in another invites misreading —
   and it removes the only reason the old code had to invent a green.
 
-  Foreground colours are chosen, not invented. Text over a brand colour is
-  black or white, whichever is readable. The brand colour is never altered to
+  Foreground colors are chosen, not invented. Text over a brand color is
+  black or white, whichever is readable. The brand color is never altered to
   make text fit; the text adapts to the brand.
 
-The single exception is `accent_text`: a brand colour used as small text on
+The single exception is `accent_text`: a brand color used as small text on
 white must clear WCAG AA 4.5:1, so it is darkened along its own hue until it
-does. That is the agency's colour at a readable lightness, not a new colour, and
+does. That is the agency's color at a readable lightness, not a new color, and
 `theme_for()` reports whether the adjustment was needed.
 """
 
@@ -107,10 +107,10 @@ def readable_on(background: str) -> str:
 
 def _walk_lightness(hex_colour: str, on: str, ratio: float, step: float,
                     fallback: str) -> str:
-    """Move a colour along its own lightness axis until it reads against `on`.
+    """Move a color along its own lightness axis until it reads against `on`.
 
     Hue and saturation are preserved, so the result is still recognisably the
-    agency's colour — this is the one adjustment made to a brand value, and only
+    agency's color — this is the one adjustment made to a brand value, and only
     because small text has to be legible.
     """
     if contrast(hex_colour, on) >= ratio:
@@ -126,13 +126,13 @@ def _walk_lightness(hex_colour: str, on: str, ratio: float, step: float,
 
 def darken_for_text(hex_colour: str, on: str = LIGHT_SURFACE,
                     ratio: float = 4.5) -> str:
-    """A brand colour dark enough to read as text on a light surface."""
+    """A brand color dark enough to read as text on a light surface."""
     return _walk_lightness(hex_colour, on, ratio, -0.02, NEUTRAL["ink"])
 
 
 def lighten_for_text(hex_colour: str, on: str = DARK_SURFACE,
                      ratio: float = 4.5) -> str:
-    """A brand colour light enough to read as text on a dark surface.
+    """A brand color light enough to read as text on a dark surface.
 
     Dark mode needs its own value: an accent darkened for white would vanish
     against the dark canvas, so both are computed and the stylesheet swaps them.
@@ -143,19 +143,19 @@ def lighten_for_text(hex_colour: str, on: str = DARK_SURFACE,
 # --------------------------------------------------------------- role assignment
 
 def roles_from(colors: list[str]) -> dict[str, str]:
-    """Fill the brand roles by reusing `colors`. Never returns a new colour.
+    """Fill the brand roles by reusing `colors`. Never returns a new color.
 
-    Every value in the result is an element of `colors`, so a four-colour agency
-    is themed in exactly its four colours.
+    Every value in the result is an element of `colors`, so a four-color agency
+    is themed in exactly its four colors.
     """
     if not colors:
-        raise ValueError("an agency needs at least one colour to theme with")
+        raise ValueError("an agency needs at least one color to theme with")
 
     by_light = sorted(colors, key=luminance)
     darkest, lightest = by_light[0], by_light[-1]
 
     def next_unused(*taken: str) -> str:
-        """Most prominent colour not already spoken for, else reuse."""
+        """Most prominent color not already spoken for, else reuse."""
         for colour in colors:                    # colors is prominence-ordered
             if colour not in taken:
                 return colour
@@ -181,17 +181,17 @@ def roles_from(colors: list[str]) -> dict[str, str]:
 
 
 def can_carry_text(background: str, ratio: float = 4.5) -> bool:
-    """Whether black or white clears `ratio` over this colour."""
+    """Whether black or white clears `ratio` over this color."""
     return max(contrast("#ffffff", background),
                contrast(NEUTRAL["ink"], background)) >= ratio
 
 
 def bands(colors: list[str]) -> str:
-    """A hard-edged stripe for each colour, in prominence order.
+    """A hard-edged stripe for each color, in prominence order.
 
-    Every colour the agency has appears exactly once and at equal width, so a
-    twenty-colour agency looks like a twenty-colour agency. No interpolation:
-    blending would invent intermediate colours, which is the thing to avoid.
+    Every color the agency has appears exactly once and at equal width, so a
+    twenty-color agency looks like a twenty-color agency. No interpolation:
+    blending would invent intermediate colors, which is the thing to avoid.
     """
     step = 100 / len(colors)
     stops = ", ".join(
@@ -201,7 +201,7 @@ def bands(colors: list[str]) -> str:
 
 
 def sweep(colors: list[str], limit: int = 4) -> str:
-    """A soft diagonal wash for large fills, using the most prominent colours.
+    """A soft diagonal wash for large fills, using the most prominent colors.
 
     Capped because a twenty-stop gradient across a whole state silhouette reads
     as mud. The full set is always shown by `bands()`; this is for area fills
@@ -216,9 +216,9 @@ def sweep(colors: list[str], limit: int = 4) -> str:
 def theme_for(colors: list[str]) -> dict[str, object]:
     """The complete set of values the stylesheet needs, plus what it drew on.
 
-    `brand_count` is how many colours the agency actually has; `reused` is how
+    `brand_count` is how many colors the agency actually has; `reused` is how
     many roles had to share one. Both are reported rather than hidden, because
-    "themed in four colours" is the honest description of a four-colour agency.
+    "themed in four colors" is the honest description of a four-color agency.
     """
     roles = roles_from(colors)
     accent = roles["accent"]

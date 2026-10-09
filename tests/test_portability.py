@@ -3,7 +3,7 @@
 These tests build a synthetic corpus for an agency that shares nothing with
 SCDES — different state, different domain, instruments called "Schedule"
 numbered 1–5 instead of "Appendix" A–N, checkpoints called "Stage", different
-roles, different statutory programmes, a different risk vocabulary — and assert
+roles, different statutory programs, a different risk vocabulary — and assert
 that discovery adapts.
 
 They are the guard against agency-specific values creeping back into code.
@@ -105,7 +105,7 @@ def test_vocabulary_follows_the_corpus(other_agency):
 
 
 def test_no_agency_literals_survive_in_the_discovery_path():
-    """Code that discovers must not name any agency, programme or bureau."""
+    """Code that discovers must not name any agency, program or bureau."""
     import re
     from pathlib import Path
 

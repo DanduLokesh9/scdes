@@ -61,7 +61,7 @@ INTAKE_SCHEMA = {
         "public_facing": {"type": "boolean"},
         "touches_protected_data": {"type": "boolean"},
         "federal_program": {"type": "string",
-                            "description": "Named delegated programme, or empty"},
+                            "description": "Named delegated program, or empty"},
         "expected_outcome": {"type": "string"},
     },
     "required": ["project_name", "problem_statement", "bureau",
@@ -289,7 +289,7 @@ class AnthropicProvider:
             "Read this plain-language description of a problem at SCDES and fill "
             "the intake fields. Suggest Category 1 for internal efficiency work, "
             "2 for anything touching public services or regulated parties, 3 for "
-            "exploratory capability building. Do not invent a federal programme "
+            "exploratory capability building. Do not invent a federal program "
             "that is not implied.\n\n"
             f"Description:\n{description}"
         )
